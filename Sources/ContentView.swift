@@ -84,9 +84,6 @@ struct ContentView: View {
             utilityRow("Todo", icon: "checklist", tint: .blue, badge: store.todos.filter { !$0.done }.count) {
                 withAnimation(.easeInOut(duration: 0.12)) { showTodoList = true }
             }
-            utilityRow("Generate standup", icon: "sparkles", tint: .purple) {
-                store.generateStandup(); StandupWindowController.show(store: store)
-            }
             utilityRow("Settings", icon: "gearshape", tint: .secondary) {
                 withAnimation(.easeInOut(duration: 0.12)) { showSettings = true }
             }
@@ -317,94 +314,6 @@ struct HoverRow: ButtonStyle {
     }
 }
 
-/// Renders the standup as native-font sections: a bold "Header:" line + a paragraph,
-/// styled to match the rest of the app (system font, not monospaced).
-struct StandupBody: View {
-    let text: String
-    private let headers = ["Shipped:", "Working on:", "Blockers:"]
-
-    private struct Section: Identifiable { let id = UUID(); let title: String; let body: String }
-
-    private var sections: [Section] {
-        var result: [Section] = []
-        var current: String? = nil
-        var buf: [String] = []
-        func flush() {
-            if let c = current {
-                result.append(Section(title: c, body: buf.joined(separator: " ")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)))
-            }
-            buf = []
-        }
-        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if let h = headers.first(where: { line.caseInsensitiveCompare($0) == .orderedSame }) {
-                flush(); current = h
-            } else if !line.isEmpty {
-                buf.append(line)
-            }
-        }
-        flush()
-        return result
-    }
-
-    var body: some View {
-        let secs = sections
-        if secs.isEmpty {
-            Text(text).font(.system(size: 13)).frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(secs) { s in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(s.title.replacingOccurrences(of: ":", with: "").uppercased())
-                            .font(.system(size: 10, weight: .bold)).tracking(0.8)
-                            .foregroundStyle(.secondary)
-                        Text(s.body).font(.system(size: 13))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Standup content shown in a standalone, movable & resizable window.
-struct StandupWindowView: View {
-    @ObservedObject var store: DashStore
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if store.standupLoading {
-                VStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Generating…").foregroundStyle(.secondary).font(.caption)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    StandupBody(text: store.standupText ?? "")
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            Divider()
-            HStack {
-                Button {
-                    if let t = store.standupText {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(t, forType: .string)
-                    }
-                } label: { Label("Copy", systemImage: "doc.on.doc") }
-                .disabled(store.standupText == nil)
-                Spacer()
-                Button { store.generateStandup() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
-                    .disabled(store.standupLoading)
-            }
-        }
-        .padding(14)
-        .frame(minWidth: 320, minHeight: 220)
-    }
-}
-
 // MARK: - Settings (inline section within the popover)
 
 struct SettingsInline: View {
@@ -480,23 +389,3 @@ struct SettingsInline: View {
     }
 }
 
-/// Opens/reuses a real NSWindow (draggable, resizable) for the standup.
-enum StandupWindowController {
-    static var window: NSWindow?
-    static func show(store: DashStore) {
-        if window == nil {
-            let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 440, height: 340),
-                styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                backing: .buffered, defer: false)
-            w.title = "Standup"
-            w.isReleasedWhenClosed = false
-            w.minSize = NSSize(width: 320, height: 220)
-            w.center()
-            w.contentView = NSHostingView(rootView: StandupWindowView(store: store))
-            window = w
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
-    }
-}

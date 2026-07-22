@@ -180,8 +180,6 @@ final class DashStore: ObservableObject {
     @Published var ghState: GHState = .ok
     private var pendingRefresh = false
     @Published var updated = ""
-    @Published var standupText: String? = nil
-    @Published var standupLoading = false
 
     let settings = Settings()
     private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
@@ -412,46 +410,6 @@ final class DashStore: ObservableObject {
             if Self.isBot(login: login, typename: typename) { bot += 1 } else { human += 1 }
         }
         return (human, bot)
-    }
-
-    // ---- AI standup ----
-    func generateStandup() {
-        standupLoading = true
-        standupText = nil
-        let days = settings.recentDays
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            let since = Self.daysAgo(days)
-            let jq = ".[] | \"- \\(.repository.name): \\(.title)\""
-            let merged = Shell.run(["gh", "search", "prs", "--author", "@me", "--merged",
-                "--merged-at", ">=\(since)", "--limit", "30", "--json", "title,repository", "--jq", jq])
-            let open = Shell.run(["gh", "search", "prs", "--author", "@me", "--state", "open",
-                "--limit", "30", "--json", "title,repository", "--jq", jq])
-            let prompt = """
-            Write a short first-person standup update I can read aloud to my team, organized into three \
-            sections so it's easy to read. Use EXACTLY these three headers, each on its own line, in this order:
-
-            Shipped:
-            Working on:
-            Blockers:
-
-            Under each header write 1-2 short flowing sentences (a small conversational paragraph), NOT bullet \
-            points. Group related PRs together naturally within the sentences. Keep the whole thing tight \
-            (under ~120 words total). If there are no blockers, write "None right now." under Blockers. \
-            Don't invent anything beyond the data below and don't add any other text, preamble, or extra headers.
-
-            RECENTLY MERGED (last \(days) days):
-            \(merged.isEmpty ? "(none)" : merged)
-
-            CURRENTLY OPEN PRS:
-            \(open.isEmpty ? "(none)" : open)
-            """
-            let result = Shell.run(["claude", "-p", prompt]).trimmingCharacters(in: .whitespacesAndNewlines)
-            DispatchQueue.main.async {
-                self.standupText = result.isEmpty ? "Standup generation failed. Check `claude` CLI." : result
-                self.standupLoading = false
-            }
-        }
     }
 
     // ---- Todos (read/write ~/.pi/todo.md) ----
