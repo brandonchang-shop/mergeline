@@ -4,6 +4,8 @@ import AppKit
 struct ContentView: View {
     @ObservedObject var store: DashStore
     @State private var expandPRs = false
+    @State private var expandReview = false
+    @State private var expandMerged = false
     @State private var newTask = ""
     @State private var editingID: UUID?
     @State private var editText = ""
@@ -142,10 +144,9 @@ struct ContentView: View {
             if store.reviewPRs.isEmpty {
                 emptyRow(store.loading ? "Loading…" : "No review requests")
             } else {
-                ForEach(store.reviewPRs.prefix(topN)) { pr in prRow(pr) }
-                if store.reviewPRs.count > topN {
-                    emptyRow("+\(store.reviewPRs.count - topN) more")
-                }
+                let shown = expandReview ? store.reviewPRs : Array(store.reviewPRs.prefix(topN))
+                ForEach(shown) { pr in prRow(pr) }
+                moreToggle(total: store.reviewPRs.count, expanded: $expandReview)
             }
         }
     }
@@ -157,8 +158,24 @@ struct ContentView: View {
             if store.mergedPRs.isEmpty {
                 emptyRow(store.loading ? "Loading…" : "Nothing merged")
             } else {
-                ForEach(store.mergedPRs.prefix(topN)) { pr in prRow(pr) }
+                let shown = expandMerged ? store.mergedPRs : Array(store.mergedPRs.prefix(topN))
+                ForEach(shown) { pr in prRow(pr) }
+                moreToggle(total: store.mergedPRs.count, expanded: $expandMerged)
             }
+        }
+    }
+
+    // Shared "N more / Show less" toggle (matches Open PRs).
+    @ViewBuilder
+    private func moreToggle(total: Int, expanded: Binding<Bool>) -> some View {
+        if total > topN {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { expanded.wrappedValue.toggle() }
+            } label: {
+                Label(expanded.wrappedValue ? "Show less" : "\(total - topN) more",
+                      systemImage: expanded.wrappedValue ? "chevron.up" : "chevron.down")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.buttonStyle(.plain)
         }
     }
 
