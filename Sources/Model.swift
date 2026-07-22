@@ -164,21 +164,39 @@ final class DashStore: ObservableObject {
         if loading { return }
         loading = true
         let days = settings.recentDays
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        let since = Self.daysAgo(days)
+        let q = DispatchQueue.global(qos: .userInitiated)
+        let group = DispatchGroup()
+
+        // Run the three gh queries concurrently and publish each section as
+        // soon as it returns (no section waits behind another).
+        group.enter()
+        q.async { [weak self] in
+            defer { group.leave() }
             guard let self else { return }
             let open = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--state", "open"], enrich: true)
-            let since = Self.daysAgo(days)
+            DispatchQueue.main.async { self.openPRs = open }
+        }
+        group.enter()
+        q.async { [weak self] in
+            defer { group.leave() }
+            guard let self else { return }
             let merged = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
+            DispatchQueue.main.async { self.mergedPRs = merged }
+        }
+        group.enter()
+        q.async { [weak self] in
+            defer { group.leave() }
+            guard let self else { return }
             let review = self.fetchPRs(who: ["--review-requested", "@me"], extraArgs: ["--state", "open"], enrich: true)
-            let stamp = Self.timeStamp()
-            DispatchQueue.main.async {
-                self.openPRs = open
-                self.mergedPRs = merged
-                self.reviewPRs = review
-                self.updated = stamp
-                self.loading = false
-                self.saveCache()
-            }
+            DispatchQueue.main.async { self.reviewPRs = review }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            guard let self else { return }
+            self.updated = Self.timeStamp()
+            self.loading = false
+            self.saveCache()
         }
     }
 
@@ -193,19 +211,25 @@ final class DashStore: ObservableObject {
         else { return [] }
 
         var prs: [PR] = []
-        var enriched = 0
         for item in arr {
             let title = item["title"] as? String ?? ""
             let url = item["url"] as? String ?? ""
             let repo = (item["repository"] as? [String: Any])?["name"] as? String ?? ""
             guard !url.isEmpty else { continue }
             var pr = PR(repo: repo, title: title, url: url)
-            if !enrich {
-                pr.status = "merged"
-            } else if enriched < enrichCount {
-                pr.status = self.status(for: url); enriched += 1
-            }
+            if !enrich { pr.status = "merged" }
             prs.append(pr)
+        }
+
+        // Enrich the top N PRs' status in parallel (each is a separate `gh pr view`
+        // network call; running them serially was the main source of latency).
+        if enrich {
+            let n = min(enrichCount, prs.count)
+            let lock = NSLock()
+            DispatchQueue.concurrentPerform(iterations: n) { i in
+                let s = self.status(for: prs[i].url)
+                lock.lock(); prs[i].status = s; lock.unlock()
+            }
         }
         return prs
     }
