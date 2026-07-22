@@ -63,8 +63,8 @@ struct ContentView: View {
                 Label("Standup", systemImage: "sparkles")
             }.buttonStyle(.plain).foregroundStyle(Color.purple)
             Spacer()
-            if !store.updated.isEmpty {
-                Text("Updated \(store.updated)").font(.caption).foregroundStyle(.secondary)
+            if store.loading {
+                ProgressView().controlSize(.small).scaleEffect(0.6)
             }
         }
         .font(.system(size: 11))
