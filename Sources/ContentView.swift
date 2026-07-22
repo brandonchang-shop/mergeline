@@ -23,12 +23,11 @@ struct ContentView: View {
                         if store.settings.showOpenPRs { prSection }
                         if store.settings.showMerged { mergedSection }
                         if store.settings.showTodos { todoSection }
+                        utilitiesSection
                     }
                     .padding(.horizontal, 10).padding(.vertical, 8)
                 }
             }
-            Divider()
-            footer
         }
         .frame(width: 330, height: 440)
     }
@@ -50,18 +49,29 @@ struct ContentView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
     }
 
-    private var footer: some View {
-        HStack {
-            Button { store.generateStandup(); StandupWindowController.show(store: store) } label: {
-                Label("Standup", systemImage: "sparkles")
-            }.buttonStyle(.plain).foregroundStyle(Color.purple)
-            Spacer()
-            Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings.toggle() } } label: {
-                Image(systemName: showSettings ? "xmark" : "gearshape").font(.system(size: 12))
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
+    // MARK: Utilities (grouped rows, like the Shopify menu-bar app)
+    private var utilitiesSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            sectionLabel("UTILITIES", "wrench.and.screwdriver")
+            utilityRow("Generate standup", icon: "sparkles", tint: .purple) {
+                store.generateStandup(); StandupWindowController.show(store: store)
+            }
+            utilityRow("Settings", icon: "gearshape", tint: .secondary) {
+                withAnimation(.easeInOut(duration: 0.12)) { showSettings = true }
+            }
         }
-        .font(.system(size: 11))
-        .padding(.horizontal, 10).padding(.vertical, 5)
+    }
+
+    private func utilityRow(_ title: String, icon: String, tint: Color, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(tint).frame(width: 14)
+                Text(title).font(.system(size: 11))
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }.buttonStyle(HoverRow())
     }
 
     // MARK: PRs
@@ -243,33 +253,24 @@ struct SettingsInline: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("SECTIONS").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(.secondary)
+        Form {
+            Section("Sections") {
                 Toggle("Open PRs", isOn: $settings.showOpenPRs)
-                Toggle("Merged · recent", isOn: $settings.showMerged)
+                Toggle("Merged", isOn: $settings.showMerged)
                 Toggle("Todo", isOn: $settings.showTodos)
-
-                Divider().padding(.vertical, 2)
-                Text("DATA").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(.secondary)
-                HStack {
-                    Text("Recent window").font(.system(size: 11))
-                    Spacer()
-                    Stepper("\(settings.recentDays)d", value: $settings.recentDays, in: 1...90)
-                        .font(.system(size: 11))
-                }
-                .onChange(of: settings.recentDays) { _, _ in store.refresh() }
-
-                Divider().padding(.vertical, 2)
-                Text("GENERAL").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(.secondary)
+            }
+            Section("Data") {
+                Stepper("Recent window: \(settings.recentDays) day\(settings.recentDays == 1 ? "" : "s")",
+                        value: $settings.recentDays, in: 1...90)
+                    .onChange(of: settings.recentDays) { _, _ in store.refresh() }
+            }
+            Section("General") {
                 Toggle("Launch at login", isOn: $launch)
                     .onChange(of: launch) { _, v in settings.launchAtLogin = v }
             }
-            .toggleStyle(.checkbox)
-            .font(.system(size: 11))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12).padding(.vertical, 10)
         }
+        .formStyle(.grouped)
+        .font(.system(size: 11))
     }
 }
 
