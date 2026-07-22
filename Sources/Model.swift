@@ -124,6 +124,7 @@ final class DashStore: ObservableObject {
     @Published var reviewPRs: [PR] = []
     @Published var todos: [Todo] = []
     @Published var loading = false
+    private var pendingRefresh = false
     @Published var updated = ""
     @Published var standupText: String? = nil
     @Published var standupLoading = false
@@ -161,7 +162,10 @@ final class DashStore: ObservableObject {
     // ---- Refresh PRs (background) ----
     func refresh() {
         loadTodos()
-        if loading { return }
+        // If a refresh is already running, don't drop this request — remember it
+        // and re-run once the current one finishes (picks up the latest settings,
+        // e.g. a changed recent-days window).
+        if loading { pendingRefresh = true; return }
         loading = true
         let days = settings.recentDays
         let since = Self.daysAgo(days)
@@ -197,6 +201,7 @@ final class DashStore: ObservableObject {
             self.updated = Self.timeStamp()
             self.loading = false
             self.saveCache()
+            if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
         }
     }
 

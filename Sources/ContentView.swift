@@ -138,7 +138,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("MERGED · LAST \(store.settings.recentDays) DAY\(store.settings.recentDays == 1 ? "" : "S")", "checkmark.seal.fill")
             if store.mergedPRs.isEmpty {
-                emptyRow("Nothing merged")
+                emptyRow(store.loading ? "Loading…" : "Nothing merged")
             } else {
                 ForEach(store.mergedPRs.prefix(topN)) { pr in prRow(pr) }
             }
