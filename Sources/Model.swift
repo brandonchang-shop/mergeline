@@ -65,6 +65,11 @@ final class Settings: ObservableObject {
     @Published var showReviewRequests = Settings.boolOr("showReviewRequests", true) {
         didSet { d.set(showReviewRequests, forKey: "showReviewRequests") }
     }
+    // When false (default), Review Requests shows only PRs requested from you
+    // directly; when true, also includes ones requested via your teams.
+    @Published var includeTeamReviews = Settings.boolOr("includeTeamReviews", false) {
+        didSet { d.set(includeTeamReviews, forKey: "includeTeamReviews") }
+    }
     @Published var recentDays = max(1, Settings.intOr("recentDays", 7)) {
         didSet { d.set(recentDays, forKey: "recentDays") }
     }
@@ -198,6 +203,7 @@ final class DashStore: ObservableObject {
         loading = true
         let days = settings.recentDays
         let since = Self.daysAgo(days)
+        let includeTeam = settings.includeTeamReviews
         let q = DispatchQueue.global(qos: .userInitiated)
 
         // Do everything off the main thread, starting with the gh dependency
@@ -233,7 +239,12 @@ final class DashStore: ObservableObject {
             group.enter()
             q.async {
                 defer { group.leave() }
-                let review = self.fetchPRs(who: ["--review-requested", "@me"], extraArgs: ["--state", "open"], enrich: true)
+                // Direct-only uses the `user-review-requested:@me` qualifier (excludes
+                // team requests); team-inclusive uses gh's --review-requested flag.
+                let reviewWho = includeTeam
+                    ? ["--review-requested", "@me"]
+                    : ["user-review-requested:@me"]
+                let review = self.fetchPRs(who: reviewWho, extraArgs: ["--state", "open"], enrich: true)
                 DispatchQueue.main.async { self.reviewPRs = review }
             }
 

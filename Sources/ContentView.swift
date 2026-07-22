@@ -424,6 +424,12 @@ struct SettingsInline: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
             }
+
+            groupHeader("REVIEW REQUESTS")
+            card {
+                toggleRow("Include team requests", $settings.includeTeamReviews)
+                    .onChange(of: settings.includeTeamReviews) { _, _ in store.refresh() }
+            }
         }
         .padding(12)
         .frame(width: 340, alignment: .leading)
