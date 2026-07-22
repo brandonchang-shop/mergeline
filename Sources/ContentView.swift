@@ -258,25 +258,56 @@ struct SettingsInline: View {
     }
 
     var body: some View {
-        Form {
-            Section("Sections") {
-                Toggle("Open PRs", isOn: $settings.showOpenPRs)
-                Toggle("Merged", isOn: $settings.showMerged)
-                Toggle("Todo", isOn: $settings.showTodos)
+        VStack(alignment: .leading, spacing: 14) {
+            groupHeader("SECTIONS")
+            card {
+                toggleRow("Open PRs", $settings.showOpenPRs)
+                rowDivider
+                toggleRow("Merged", $settings.showMerged)
+                rowDivider
+                toggleRow("Todo", $settings.showTodos)
             }
-            Section("Data") {
-                Stepper("Recent window: \(settings.recentDays) day\(settings.recentDays == 1 ? "" : "s")",
-                        value: $settings.recentDays, in: 1...90)
-                    .onChange(of: settings.recentDays) { _, _ in store.refresh() }
+
+            groupHeader("DATA")
+            card {
+                HStack {
+                    Text("Recent window").font(.system(size: 12))
+                    Spacer()
+                    Stepper("\(settings.recentDays) day\(settings.recentDays == 1 ? "" : "s")",
+                            value: $settings.recentDays, in: 1...90)
+                        .font(.system(size: 12))
+                        .onChange(of: settings.recentDays) { _, _ in store.refresh() }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
             }
-            Section("General") {
-                Toggle("Launch at login", isOn: $launch)
+
+            groupHeader("GENERAL")
+            card {
+                toggleRow("Launch at login", $launch)
                     .onChange(of: launch) { _, v in settings.launchAtLogin = v }
             }
         }
-        .formStyle(.grouped)
-        .font(.system(size: 11))
-        .frame(width: 340, height: 300)
+        .padding(12)
+        .frame(width: 340, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func groupHeader(_ t: String) -> some View {
+        Text(t).font(.system(size: 10, weight: .bold)).tracking(0.8)
+            .foregroundStyle(.secondary).padding(.leading, 4)
+    }
+    private var rowDivider: some View { Divider().padding(.leading, 10) }
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+    }
+    private func toggleRow(_ title: String, _ binding: Binding<Bool>) -> some View {
+        HStack {
+            Text(title).font(.system(size: 12))
+            Spacer()
+            Toggle("", isOn: binding).labelsHidden().toggleStyle(.switch).controlSize(.small)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
     }
 }
 
