@@ -66,9 +66,6 @@ struct ContentView: View {
             if !store.updated.isEmpty {
                 Text("Updated \(store.updated)").font(.caption).foregroundStyle(.secondary)
             }
-            Button { NSApp.terminate(nil) } label: {
-                Image(systemName: "power")
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
         }
         .font(.system(size: 11))
         .padding(.horizontal, 10).padding(.vertical, 5)
