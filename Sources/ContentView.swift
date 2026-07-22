@@ -237,6 +237,58 @@ struct HoverRow: ButtonStyle {
     }
 }
 
+/// Renders the standup as native-font sections: a bold "Header:" line + a paragraph,
+/// styled to match the rest of the app (system font, not monospaced).
+struct StandupBody: View {
+    let text: String
+    private let headers = ["Shipped:", "Working on:", "Blockers:"]
+
+    private struct Section: Identifiable { let id = UUID(); let title: String; let body: String }
+
+    private var sections: [Section] {
+        var result: [Section] = []
+        var current: String? = nil
+        var buf: [String] = []
+        func flush() {
+            if let c = current {
+                result.append(Section(title: c, body: buf.joined(separator: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
+            buf = []
+        }
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if let h = headers.first(where: { line.caseInsensitiveCompare($0) == .orderedSame }) {
+                flush(); current = h
+            } else if !line.isEmpty {
+                buf.append(line)
+            }
+        }
+        flush()
+        return result
+    }
+
+    var body: some View {
+        let secs = sections
+        if secs.isEmpty {
+            Text(text).font(.system(size: 13)).frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(secs) { s in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(s.title.replacingOccurrences(of: ":", with: "").uppercased())
+                            .font(.system(size: 10, weight: .bold)).tracking(0.8)
+                            .foregroundStyle(.secondary)
+                        Text(s.body).font(.system(size: 13))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Standup content shown in a standalone, movable & resizable window.
 struct StandupWindowView: View {
     @ObservedObject var store: DashStore
@@ -249,8 +301,7 @@ struct StandupWindowView: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    Text(store.standupText ?? "")
-                        .font(.system(size: 13, design: .monospaced))
+                    StandupBody(text: store.standupText ?? "")
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

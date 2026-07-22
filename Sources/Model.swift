@@ -283,16 +283,17 @@ final class DashStore: ObservableObject {
             let open = Shell.run(["gh", "search", "prs", "--author", "@me", "--state", "open",
                 "--limit", "30", "--json", "title,repository", "--jq", jq])
             let prompt = """
-            Write a short first-person standup update, organized into three labeled sections so it's easy to \
-            scan. Use EXACTLY these three headers, each on its own line, in this order:
+            Write a short first-person standup update I can read aloud to my team, organized into three \
+            sections so it's easy to read. Use EXACTLY these three headers, each on its own line, in this order:
 
             Shipped:
             Working on:
             Blockers:
 
-            Under each header put 1-3 short bullet points starting with "- ". Group related PRs together. \
-            Keep the whole thing tight (under ~120 words total). If there are no blockers, write "- None". \
-            Don't invent anything beyond the data below and don't add any other text, preamble, or headers.
+            Under each header write 1-2 short flowing sentences (a small conversational paragraph), NOT bullet \
+            points. Group related PRs together naturally within the sentences. Keep the whole thing tight \
+            (under ~120 words total). If there are no blockers, write "None right now." under Blockers. \
+            Don't invent anything beyond the data below and don't add any other text, preamble, or extra headers.
 
             RECENTLY MERGED (last \(days) days):
             \(merged.isEmpty ? "(none)" : merged)
