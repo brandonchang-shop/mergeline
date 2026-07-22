@@ -268,23 +268,16 @@ struct SettingsInline: View {
                     Stepper("\(settings.recentDays)d", value: $settings.recentDays, in: 1...90)
                         .font(.system(size: 11))
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Repo filter (comma-separated, blank = all)")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                    TextField("e.g. data-warehouse, skai-train", text: $settings.repoFilter)
-                        .textFieldStyle(.roundedBorder).font(.system(size: 11))
-                }
+                .onChange(of: settings.recentDays) { _, _ in store.refresh() }
 
                 Divider().padding(.vertical, 2)
+                Text("GENERAL").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(.secondary)
                 Toggle("Launch at login", isOn: $launch)
                     .onChange(of: launch) { _, v in settings.launchAtLogin = v }
-
-                Button { store.refresh() } label: {
-                    Label("Apply & Refresh", systemImage: "arrow.clockwise").font(.system(size: 11))
-                }.buttonStyle(.plain).foregroundStyle(.blue).padding(.top, 4)
             }
-            .toggleStyle(.switch)
+            .toggleStyle(.checkbox)
             .font(.system(size: 11))
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12).padding(.vertical, 10)
         }
     }

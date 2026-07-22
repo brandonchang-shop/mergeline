@@ -64,9 +64,6 @@ final class Settings: ObservableObject {
     @Published var recentDays = max(1, Settings.intOr("recentDays", 7)) {
         didSet { d.set(recentDays, forKey: "recentDays") }
     }
-    @Published var repoFilter = UserDefaults.standard.string(forKey: "repoFilter") ?? "" {
-        didSet { d.set(repoFilter, forKey: "repoFilter") }
-    }
 
     // Launch at login (SMAppService, macOS 13+)
     var launchAtLogin: Bool {
@@ -77,18 +74,6 @@ final class Settings: ObservableObject {
             catch { NSLog("launchAtLogin toggle failed: \(error)") }
             objectWillChange.send()
         }
-    }
-
-    /// repoFilter parsed into lowercased substrings; empty = match all.
-    var repoTokens: [String] {
-        repoFilter.split(whereSeparator: { $0 == "," || $0 == " " })
-            .map { $0.lowercased() }.filter { !$0.isEmpty }
-    }
-    func matchesRepo(_ repo: String) -> Bool {
-        let tokens = repoTokens
-        if tokens.isEmpty { return true }
-        let r = repo.lowercased()
-        return tokens.contains { r.contains($0) }
     }
 }
 
@@ -194,7 +179,7 @@ final class DashStore: ObservableObject {
             let title = item["title"] as? String ?? ""
             let url = item["url"] as? String ?? ""
             let repo = (item["repository"] as? [String: Any])?["name"] as? String ?? ""
-            guard !url.isEmpty, settings.matchesRepo(repo) else { continue }
+            guard !url.isEmpty else { continue }
             var pr = PR(repo: repo, title: title, url: url)
             if !enrich {
                 pr.status = "merged"
