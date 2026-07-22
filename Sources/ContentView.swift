@@ -257,6 +257,14 @@ struct PRRow: View {
                         Text(pr.repo).font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 4)
+                    if pr.humanCount > 0 {
+                        Text("💬 \(pr.humanCount)").font(.system(size: 10))
+                            .help("\(pr.humanCount) open human comment thread\(pr.humanCount == 1 ? "" : "s")")
+                    }
+                    if pr.botCount > 0 {
+                        Text("🤖 \(pr.botCount)").font(.system(size: 10))
+                            .help("\(pr.botCount) open bot comment thread\(pr.botCount == 1 ? "" : "s")")
+                    }
                 }
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)

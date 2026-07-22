@@ -11,6 +11,26 @@ struct PR: Identifiable, Codable {
     let title: String
     let url: String
     var status: String = "neutral"   // neutral|merged|approved|fail|pending|changes|draft
+    var humanCount: Int = 0          // unresolved review threads opened by a human
+    var botCount: Int = 0            // unresolved review threads opened by a bot (binks/orc/etc.)
+
+    init(repo: String, title: String, url: String, status: String = "neutral",
+         humanCount: Int = 0, botCount: Int = 0) {
+        self.repo = repo; self.title = title; self.url = url
+        self.status = status; self.humanCount = humanCount; self.botCount = botCount
+    }
+
+    // Tolerate old cache files that lack the newer fields.
+    enum CodingKeys: String, CodingKey { case repo, title, url, status, humanCount, botCount }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        repo = try c.decode(String.self, forKey: .repo)
+        title = try c.decode(String.self, forKey: .title)
+        url = try c.decode(String.self, forKey: .url)
+        status = (try? c.decode(String.self, forKey: .status)) ?? "neutral"
+        humanCount = (try? c.decode(Int.self, forKey: .humanCount)) ?? 0
+        botCount = (try? c.decode(Int.self, forKey: .botCount)) ?? 0
+    }
 
     var symbol: String {
         switch status {
@@ -294,7 +314,12 @@ final class DashStore: ObservableObject {
             let lock = NSLock()
             DispatchQueue.concurrentPerform(iterations: n) { i in
                 let s = self.status(for: prs[i].url)
-                lock.lock(); prs[i].status = s; lock.unlock()
+                let (human, bot) = self.unresolvedThreadCounts(for: prs[i].url)
+                lock.lock()
+                prs[i].status = s
+                prs[i].humanCount = human
+                prs[i].botCount = bot
+                lock.unlock()
             }
         }
         return prs
@@ -333,6 +358,60 @@ final class DashStore: ObservableObject {
         if ci == "pending" { return "pending" }
         if review == "APPROVED" { return "approved" }
         return "neutral"
+    }
+
+    /// Login names treated as bots even though GitHub types them as `User`.
+    private static let botLogins: Set<String> = ["binks", "shopify-orc", "github-actions", "dependabot"]
+
+    private static func isBot(login: String, typename: String) -> Bool {
+        if typename == "Bot" { return true }
+        let l = login.lowercased()
+        if l.hasSuffix("[bot]") || l.hasSuffix("-bot") { return true }
+        return botLogins.contains(l)
+    }
+
+    /// Counts UNRESOLVED review threads on a PR, split into human vs bot by the
+    /// thread's first comment author. Returns (human, bot). Uses one GraphQL call.
+    private func unresolvedThreadCounts(for url: String) -> (Int, Int) {
+        // Parse https://github.com/OWNER/REPO/pull/NUMBER
+        guard let comps = URLComponents(string: url) else { return (0, 0) }
+        let parts = comps.path.split(separator: "/").map(String.init)  // [OWNER, REPO, "pull", NUMBER]
+        guard parts.count >= 4, parts[2] == "pull", let number = Int(parts[3]) else { return (0, 0) }
+        let owner = parts[0], repo = parts[1]
+
+        let query = """
+        query($owner:String!,$repo:String!,$number:Int!){
+          repository(owner:$owner,name:$repo){
+            pullRequest(number:$number){
+              reviewThreads(first:100){ nodes {
+                isResolved
+                comments(first:1){ nodes { author { login __typename } } }
+              }}
+            }
+          }
+        }
+        """
+        let out = Shell.run(["gh", "api", "graphql",
+                             "-f", "query=\(query)",
+                             "-F", "owner=\(owner)", "-F", "repo=\(repo)", "-F", "number=\(number)"])
+        guard let data = out.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let dataObj = obj["data"] as? [String: Any],
+              let repoObj = dataObj["repository"] as? [String: Any],
+              let pr = repoObj["pullRequest"] as? [String: Any],
+              let threads = pr["reviewThreads"] as? [String: Any],
+              let nodes = threads["nodes"] as? [[String: Any]]
+        else { return (0, 0) }
+
+        var human = 0, bot = 0
+        for t in nodes {
+            if t["isResolved"] as? Bool == true { continue }   // only OPEN threads
+            let author = ((t["comments"] as? [String: Any])?["nodes"] as? [[String: Any]])?.first?["author"] as? [String: Any]
+            let login = author?["login"] as? String ?? ""
+            let typename = author?["__typename"] as? String ?? ""
+            if Self.isBot(login: login, typename: typename) { bot += 1 } else { human += 1 }
+        }
+        return (human, bot)
     }
 
     // ---- AI standup ----
