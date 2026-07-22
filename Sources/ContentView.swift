@@ -46,22 +46,19 @@ struct ContentView: View {
                 Text("Dev Dashboard").font(.system(size: 12, weight: .semibold))
             }
             Spacer()
-            Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings.toggle() } } label: {
-                Image(systemName: showSettings ? "xmark" : "gearshape").font(.system(size: 11))
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
     }
 
     private var footer: some View {
         HStack {
-            Button { store.refresh() } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
             Button { store.generateStandup(); StandupWindowController.show(store: store) } label: {
                 Label("Standup", systemImage: "sparkles")
             }.buttonStyle(.plain).foregroundStyle(Color.purple)
             Spacer()
+            Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings.toggle() } } label: {
+                Image(systemName: showSettings ? "xmark" : "gearshape").font(.system(size: 12))
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
         }
         .font(.system(size: 11))
         .padding(.horizontal, 10).padding(.vertical, 5)
