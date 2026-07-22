@@ -14,9 +14,6 @@ swiftc -O -swift-version 5 \
   -o "$BIN_DIR/Mergeline" \
   Sources/Model.swift Sources/ContentView.swift Sources/main.swift
 
-# App icon (Finder / ⌘-Tab / Notification Center)
-cp Mergeline.icns "$RES_DIR/Mergeline.icns"
-
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,8 +26,6 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>Mergeline</string>
-  <key>CFBundleIconFile</key><string>Mergeline</string>
-  <key>CFBundleIconName</key><string>Mergeline</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
 </dict>
