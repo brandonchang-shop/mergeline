@@ -89,11 +89,23 @@ enum Shell {
         "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"
     ].joined(separator: ":")
 
+    /// An empty scratch dir used as the working directory for child processes.
+    /// When launched via `open`, the app's cwd is `/`; tools like `claude` scan
+    /// their cwd as a "project", and walking from `/` reaches TCC-protected user
+    /// folders (Photos/Music) → spurious permission prompts. Running in an empty
+    /// dir gives them nothing protected to scan.
+    static let workDir: String = {
+        let dir = "\(NSHomeDirectory())/.pi/mergeline_work"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
     @discardableResult
     static func run(_ args: [String]) -> String {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         p.arguments = args
+        p.currentDirectoryURL = URL(fileURLWithPath: workDir)
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = extraPath + ":" + (env["PATH"] ?? "")
         p.environment = env
