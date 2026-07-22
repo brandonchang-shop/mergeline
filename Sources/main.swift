@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         installEditMenu()   // enables ⌘X/⌘C/⌘V/⌘A/⌘Z in text fields
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "chevron.left.forwardslash.chevron.right", accessibilityDescription: "Dev Dashboard")
+            button.image = NSImage(systemSymbolName: "chevron.left.forwardslash.chevron.right", accessibilityDescription: "Mergeline")
             button.image?.isTemplate = true
             button.action = #selector(togglePopover(_:))
             button.target = self

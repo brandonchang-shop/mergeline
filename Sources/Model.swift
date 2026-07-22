@@ -130,7 +130,7 @@ final class DashStore: ObservableObject {
 
     let settings = Settings()
     private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
-    private let cachePath = "\(NSHomeDirectory())/.pi/devdash_cache.json"
+    private let cachePath = "\(NSHomeDirectory())/.pi/mergeline_cache.json"
     private let enrichCount = 6
     private var cancellables = Set<AnyCancellable>()
 

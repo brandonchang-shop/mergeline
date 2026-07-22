@@ -47,7 +47,7 @@ struct ContentView: View {
                 Text(showSettings ? "Settings" : "Todo").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
-                Text("Dev Dashboard").font(.system(size: 14, weight: .heavy))
+                Text("Mergeline").font(.system(size: 14, weight: .heavy))
             }
             Spacer()
         }

@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname "$0")"
 
-APP="build/DevDash.app"
+APP="build/Mergeline.app"
 BIN_DIR="$APP/Contents/MacOS"
 RES_DIR="$APP/Contents/Resources"
 
@@ -11,7 +11,7 @@ mkdir -p "$BIN_DIR" "$RES_DIR"
 
 echo "Compiling…"
 swiftc -O -swift-version 5 \
-  -o "$BIN_DIR/DevDash" \
+  -o "$BIN_DIR/Mergeline" \
   Sources/Model.swift Sources/ContentView.swift Sources/main.swift
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -19,13 +19,13 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>DevDash</string>
-  <key>CFBundleDisplayName</key><string>Dev Dashboard</string>
-  <key>CFBundleIdentifier</key><string>io.local.devdash</string>
+  <key>CFBundleName</key><string>Mergeline</string>
+  <key>CFBundleDisplayName</key><string>Mergeline</string>
+  <key>CFBundleIdentifier</key><string>io.local.mergeline</string>
   <key>CFBundleVersion</key><string>1.0</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleExecutable</key><string>DevDash</string>
+  <key>CFBundleExecutable</key><string>Mergeline</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
 </dict>
