@@ -32,7 +32,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# ad-hoc codesign so macOS is happy launching it
-codesign --force --deep --sign - "$APP" 2>/dev/null || true
+# NOTE: do NOT codesign here. Santa runs in Lockdown with Transitive Allowlisting,
+# so binaries written by the allowlisted `swiftc` compiler are auto-allowed by hash.
+# Running `codesign` after swiftc rewrites the binary and changes its hash, which
+# invalidates the transitive rule and gets the app blocked (AMFI -423 / Rule: None).
 
 echo "Built $APP"
