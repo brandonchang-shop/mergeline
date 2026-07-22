@@ -283,10 +283,16 @@ final class DashStore: ObservableObject {
             let open = Shell.run(["gh", "search", "prs", "--author", "@me", "--state", "open",
                 "--limit", "30", "--json", "title,repository", "--jq", jq])
             let prompt = """
-            Write a short first-person standup update as a natural spoken script I can read aloud to my team — \
-            flowing sentences in one or two short paragraphs, NOT bullet points, NOT labeled sections, no headers. \
-            Cover what I shipped recently, what I'm working on now, and any blockers, woven together conversationally. \
-            Keep it under ~120 words, group related PRs, and don't invent anything beyond the data below.
+            Write a short first-person standup update, organized into three labeled sections so it's easy to \
+            scan. Use EXACTLY these three headers, each on its own line, in this order:
+
+            Shipped:
+            Working on:
+            Blockers:
+
+            Under each header put 1-3 short bullet points starting with "- ". Group related PRs together. \
+            Keep the whole thing tight (under ~120 words total). If there are no blockers, write "- None". \
+            Don't invent anything beyond the data below and don't add any other text, preamble, or headers.
 
             RECENTLY MERGED (last \(days) days):
             \(merged.isEmpty ? "(none)" : merged)
