@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var editingID: UUID?
     @State private var editText = ""
     @State private var showSettings = false
+    @State private var showTodoList = false
 
     private let topN = 5
 
@@ -17,12 +18,16 @@ struct ContentView: View {
             Divider()
             if showSettings {
                 SettingsInline(store: store)
+            } else if showTodoList {
+                VStack(alignment: .leading, spacing: 0) {
+                    todoSection
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     if store.settings.showOpenPRs { prSection; sectionDivider }
                     if store.settings.showReviewRequests { reviewSection; sectionDivider }
                     if store.settings.showMerged { mergedSection; sectionDivider }
-                    if store.settings.showTodos { todoSection; sectionDivider }
                     utilitiesSection
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
@@ -35,11 +40,11 @@ struct ContentView: View {
     // MARK: header / footer
     private var header: some View {
         HStack(spacing: 6) {
-            if showSettings {
-                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false } } label: {
+            if showSettings || showTodoList {
+                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showTodoList = false } } label: {
                     Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                 }.buttonStyle(.plain)
-                Text("Settings").font(.system(size: 13, weight: .bold))
+                Text(showSettings ? "Settings" : "Todo").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 13, weight: .medium)).foregroundStyle(.primary)
                 Text("Dev Dashboard").font(.system(size: 13, weight: .bold))
@@ -57,6 +62,9 @@ struct ContentView: View {
     private var utilitiesSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("UTILITIES", "wrench.and.screwdriver")
+            utilityRow("Todo", icon: "checklist", tint: .blue, badge: store.todos.filter { !$0.done }.count) {
+                withAnimation(.easeInOut(duration: 0.12)) { showTodoList = true }
+            }
             utilityRow("Generate standup", icon: "sparkles", tint: .purple) {
                 store.generateStandup(); StandupWindowController.show(store: store)
             }
@@ -66,12 +74,18 @@ struct ContentView: View {
         }
     }
 
-    private func utilityRow(_ title: String, icon: String, tint: Color, _ action: @escaping () -> Void) -> some View {
+    private func utilityRow(_ title: String, icon: String, tint: Color, badge: Int = 0, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 12)).foregroundStyle(tint).frame(width: 16)
                 Text(title).font(.system(size: 12))
                 Spacer()
+                if badge > 0 {
+                    Text("\(badge)").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.primary.opacity(0.1)))
+                }
                 Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
@@ -280,8 +294,6 @@ struct SettingsInline: View {
                 toggleRow("Review requests", $settings.showReviewRequests)
                 rowDivider
                 toggleRow("Merged", $settings.showMerged)
-                rowDivider
-                toggleRow("Todo", $settings.showTodos)
             }
 
             groupHeader("DATA")
