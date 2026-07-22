@@ -46,7 +46,6 @@ struct ContentView: View {
                 Text("Dev Dashboard").font(.system(size: 12, weight: .semibold))
             }
             Spacer()
-            if store.loading && !showSettings { ProgressView().controlSize(.small).scaleEffect(0.7) }
             Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings.toggle() } } label: {
                 Image(systemName: showSettings ? "xmark" : "gearshape").font(.system(size: 11))
             }.buttonStyle(.plain).foregroundStyle(.secondary)
@@ -63,9 +62,6 @@ struct ContentView: View {
                 Label("Standup", systemImage: "sparkles")
             }.buttonStyle(.plain).foregroundStyle(Color.purple)
             Spacer()
-            if store.loading {
-                ProgressView().controlSize(.small).scaleEffect(0.6)
-            }
         }
         .font(.system(size: 11))
         .padding(.horizontal, 10).padding(.vertical, 5)
