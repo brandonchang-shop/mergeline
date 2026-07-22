@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ServiceManagement
 
 // MARK: - App entry
 
@@ -19,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         enforceSingleInstance()   // quit any older copy so only one bag icon exists
+        enableLaunchAtLoginByDefault()   // opt-in once, on first run
         installEditMenu()   // enables ⌘X/⌘C/⌘V/⌘A/⌘Z in text fields
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -65,6 +67,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             $0.bundleIdentifier == me.bundleIdentifier && $0.processIdentifier != me.processIdentifier
         }
         others.forEach { $0.forceTerminate() }
+    }
+
+    /// Register as a login item the first time DevDash runs (default ON).
+    /// The user can still turn it off in Settings; we only auto-enable once.
+    private func enableLaunchAtLoginByDefault() {
+        let key = "didAutoEnableLogin"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        do { try SMAppService.mainApp.register() }
+        catch { NSLog("auto launch-at-login register failed: \(error)") }
     }
 
     @objc func togglePopover(_ sender: Any?) {
