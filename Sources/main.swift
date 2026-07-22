@@ -30,11 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             button.target = self
         }
 
-        popover.contentSize = NSSize(width: 330, height: 440)
         popover.behavior = .applicationDefined   // we control closing via the outside-click monitor
         popover.animates = true
         let host = NSHostingController(rootView: ContentView(store: store))
-        host.preferredContentSize = NSSize(width: 330, height: 440)
+        host.sizingOptions = [.preferredContentSize]   // popover auto-sizes to SwiftUI content (no scroll)
         popover.contentViewController = host
         popover.delegate = self
 

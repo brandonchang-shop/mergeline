@@ -18,18 +18,17 @@ struct ContentView: View {
             if showSettings {
                 SettingsInline(store: store)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if store.settings.showOpenPRs { prSection; sectionDivider }
-                        if store.settings.showMerged { mergedSection; sectionDivider }
-                        if store.settings.showTodos { todoSection; sectionDivider }
-                        utilitiesSection
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 10)
+                VStack(alignment: .leading, spacing: 0) {
+                    if store.settings.showOpenPRs { prSection; sectionDivider }
+                    if store.settings.showMerged { mergedSection; sectionDivider }
+                    if store.settings.showTodos { todoSection; sectionDivider }
+                    utilitiesSection
                 }
+                .padding(.horizontal, 12).padding(.vertical, 10)
             }
         }
-        .frame(width: 330, height: 440)
+        .frame(width: 340)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: header / footer
@@ -277,6 +276,7 @@ struct SettingsInline: View {
         }
         .formStyle(.grouped)
         .font(.system(size: 11))
+        .frame(width: 340, height: 300)
     }
 }
 
