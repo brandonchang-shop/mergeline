@@ -62,6 +62,9 @@ final class Settings: ObservableObject {
     @Published var showTodos = Settings.boolOr("showTodos", true) {
         didSet { d.set(showTodos, forKey: "showTodos") }
     }
+    @Published var showReviewRequests = Settings.boolOr("showReviewRequests", true) {
+        didSet { d.set(showReviewRequests, forKey: "showReviewRequests") }
+    }
     @Published var recentDays = max(1, Settings.intOr("recentDays", 7)) {
         didSet { d.set(recentDays, forKey: "recentDays") }
     }
@@ -106,13 +109,19 @@ enum Shell {
 
 // MARK: - Cache (open instantly with last data)
 
-private struct Cache: Codable { var open: [PR]; var merged: [PR]; var updated: String }
+private struct Cache: Codable {
+    var open: [PR]
+    var merged: [PR]
+    var review: [PR]? = nil
+    var updated: String
+}
 
 // MARK: - Store
 
 final class DashStore: ObservableObject {
     @Published var openPRs: [PR] = []
     @Published var mergedPRs: [PR] = []
+    @Published var reviewPRs: [PR] = []
     @Published var todos: [Todo] = []
     @Published var loading = false
     @Published var updated = ""
@@ -140,10 +149,10 @@ final class DashStore: ObservableObject {
     private func loadCache() {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
               let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
-        openPRs = c.open; mergedPRs = c.merged; updated = c.updated
+        openPRs = c.open; mergedPRs = c.merged; reviewPRs = c.review ?? []; updated = c.updated
     }
     private func saveCache() {
-        let c = Cache(open: openPRs, merged: mergedPRs, updated: updated)
+        let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, updated: updated)
         if let data = try? JSONEncoder().encode(c) {
             try? data.write(to: URL(fileURLWithPath: cachePath))
         }
@@ -157,13 +166,15 @@ final class DashStore: ObservableObject {
         let days = settings.recentDays
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let open = self.fetchPRs(extraArgs: ["--state", "open"], enrich: true)
+            let open = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--state", "open"], enrich: true)
             let since = Self.daysAgo(days)
-            let merged = self.fetchPRs(extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
+            let merged = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
+            let review = self.fetchPRs(who: ["--review-requested", "@me"], extraArgs: ["--state", "open"], enrich: true)
             let stamp = Self.timeStamp()
             DispatchQueue.main.async {
                 self.openPRs = open
                 self.mergedPRs = merged
+                self.reviewPRs = review
                 self.updated = stamp
                 self.loading = false
                 self.saveCache()
@@ -171,9 +182,9 @@ final class DashStore: ObservableObject {
         }
     }
 
-    private func fetchPRs(extraArgs: [String], enrich: Bool) -> [PR] {
-        var args = ["gh", "search", "prs", "--author", "@me",
-                    "--sort", "updated", "--order", "desc", "--limit", "30",
+    private func fetchPRs(who: [String], extraArgs: [String], enrich: Bool) -> [PR] {
+        var args = ["gh", "search", "prs"] + who +
+                   ["--sort", "updated", "--order", "desc", "--limit", "30",
                     "--json", "title,url,repository"]
         args.append(contentsOf: extraArgs)
         let out = Shell.run(args)

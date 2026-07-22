@@ -20,6 +20,7 @@ struct ContentView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     if store.settings.showOpenPRs { prSection; sectionDivider }
+                    if store.settings.showReviewRequests { reviewSection; sectionDivider }
                     if store.settings.showMerged { mergedSection; sectionDivider }
                     if store.settings.showTodos { todoSection; sectionDivider }
                     utilitiesSection
@@ -111,6 +112,21 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
         }.buttonStyle(HoverRow())
+    }
+
+    // MARK: Review requests
+    private var reviewSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            sectionLabel("REVIEW REQUESTS", "eye")
+            if store.reviewPRs.isEmpty {
+                emptyRow(store.loading ? "Loading…" : "No review requests")
+            } else {
+                ForEach(store.reviewPRs.prefix(topN)) { pr in prRow(pr) }
+                if store.reviewPRs.count > topN {
+                    emptyRow("+\(store.reviewPRs.count - topN) more")
+                }
+            }
+        }
     }
 
     // MARK: Merged
@@ -260,6 +276,8 @@ struct SettingsInline: View {
             groupHeader("SECTIONS")
             card {
                 toggleRow("Open PRs", $settings.showOpenPRs)
+                rowDivider
+                toggleRow("Review requests", $settings.showReviewRequests)
                 rowDivider
                 toggleRow("Merged", $settings.showMerged)
                 rowDivider
