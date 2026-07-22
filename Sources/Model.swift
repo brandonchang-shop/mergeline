@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import ServiceManagement
+import Combine
 
 // MARK: - Data types
 
@@ -122,10 +123,17 @@ final class DashStore: ObservableObject {
     private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
     private let cachePath = "\(NSHomeDirectory())/.pi/devdash_cache.json"
     private let enrichCount = 6
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         loadTodos()
         loadCache()   // show last-known PRs immediately, before gh runs
+        // Re-publish settings changes so views watching the store re-render
+        // (e.g. toggling a section updates the main view instantly).
+        settings.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     // ---- Cache ----
