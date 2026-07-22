@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var newTask = ""
     @State private var editingID: UUID?
     @State private var editText = ""
+    @State private var showSettings = false
 
     private let topN = 5
 
@@ -14,13 +15,17 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if store.settings.showOpenPRs { prSection }
-                    if store.settings.showMerged { mergedSection }
-                    if store.settings.showTodos { todoSection }
+            if showSettings {
+                SettingsInline(store: store)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if store.settings.showOpenPRs { prSection }
+                        if store.settings.showMerged { mergedSection }
+                        if store.settings.showTodos { todoSection }
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 8)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 8)
             }
             Divider()
             footer
@@ -31,10 +36,20 @@ struct ContentView: View {
     // MARK: header / footer
     private var header: some View {
         HStack(spacing: 6) {
-            Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 12)).foregroundStyle(.primary)
-            Text("Dev Dashboard").font(.system(size: 12, weight: .semibold))
+            if showSettings {
+                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false } } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                }.buttonStyle(.plain)
+                Text("Settings").font(.system(size: 12, weight: .semibold))
+            } else {
+                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 12)).foregroundStyle(.primary)
+                Text("Dev Dashboard").font(.system(size: 12, weight: .semibold))
+            }
             Spacer()
-            if store.loading { ProgressView().controlSize(.small).scaleEffect(0.7) }
+            if store.loading && !showSettings { ProgressView().controlSize(.small).scaleEffect(0.7) }
+            Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings.toggle() } } label: {
+                Image(systemName: showSettings ? "xmark" : "gearshape").font(.system(size: 11))
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
     }
@@ -47,9 +62,6 @@ struct ContentView: View {
             Button { store.generateStandup(); StandupWindowController.show(store: store) } label: {
                 Label("Standup", systemImage: "sparkles")
             }.buttonStyle(.plain).foregroundStyle(Color.purple)
-            Button { SettingsWindowController.show(store: store) } label: {
-                Image(systemName: "gearshape")
-            }.buttonStyle(.plain).foregroundStyle(.secondary)
             Spacer()
             if !store.updated.isEmpty {
                 Text("Updated \(store.updated)").font(.caption).foregroundStyle(.secondary)
@@ -227,9 +239,9 @@ struct StandupWindowView: View {
     }
 }
 
-// MARK: - Settings
+// MARK: - Settings (inline section within the popover)
 
-struct SettingsView: View {
+struct SettingsInline: View {
     @ObservedObject var store: DashStore
     @ObservedObject var settings: Settings
     @State private var launch: Bool
@@ -241,59 +253,40 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Settings").font(.headline)
-            Divider()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("SECTIONS").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(.secondary)
+                Toggle("Open PRs", isOn: $settings.showOpenPRs)
+                Toggle("Merged · recent", isOn: $settings.showMerged)
+                Toggle("Todo", isOn: $settings.showTodos)
 
-            Text("SECTIONS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-            Toggle("Open PRs", isOn: $settings.showOpenPRs)
-            Toggle("Merged · recent", isOn: $settings.showMerged)
-            Toggle("Todo", isOn: $settings.showTodos)
+                Divider().padding(.vertical, 2)
+                Text("DATA").font(.system(size: 9, weight: .semibold)).tracking(0.5).foregroundStyle(.secondary)
+                HStack {
+                    Text("Recent window").font(.system(size: 11))
+                    Spacer()
+                    Stepper("\(settings.recentDays)d", value: $settings.recentDays, in: 1...90)
+                        .font(.system(size: 11))
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Repo filter (comma-separated, blank = all)")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                    TextField("e.g. data-warehouse, skai-train", text: $settings.repoFilter)
+                        .textFieldStyle(.roundedBorder).font(.system(size: 11))
+                }
 
-            Divider()
-            HStack {
-                Text("Recent window")
-                Spacer()
-                Stepper("\(settings.recentDays) day\(settings.recentDays == 1 ? "" : "s")",
-                        value: $settings.recentDays, in: 1...90)
+                Divider().padding(.vertical, 2)
+                Toggle("Launch at login", isOn: $launch)
+                    .onChange(of: launch) { _, v in settings.launchAtLogin = v }
+
+                Button { store.refresh() } label: {
+                    Label("Apply & Refresh", systemImage: "arrow.clockwise").font(.system(size: 11))
+                }.buttonStyle(.plain).foregroundStyle(.blue).padding(.top, 4)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Repo filter (comma-separated, blank = all)")
-                    .font(.caption).foregroundStyle(.secondary)
-                TextField("e.g. data-warehouse, skai-train", text: $settings.repoFilter)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Divider()
-            Toggle("Launch at login", isOn: $launch)
-                .onChange(of: launch) { _, v in settings.launchAtLogin = v }
-
-            Spacer()
-            HStack {
-                Spacer()
-                Button("Apply & Refresh") { store.refresh() }.keyboardShortcut(.defaultAction)
-            }
+            .toggleStyle(.switch)
+            .font(.system(size: 11))
+            .padding(.horizontal, 12).padding(.vertical, 10)
         }
-        .padding(16)
-        .frame(width: 320, height: 380)
-    }
-}
-
-enum SettingsWindowController {
-    static var window: NSWindow?
-    static func show(store: DashStore) {
-        if window == nil {
-            let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 320, height: 380),
-                styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            w.title = "DevDash Settings"
-            w.isReleasedWhenClosed = false
-            w.center()
-            w.contentView = NSHostingView(rootView: SettingsView(store: store))
-            window = w
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
     }
 }
 

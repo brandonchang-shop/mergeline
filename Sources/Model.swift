@@ -115,10 +115,6 @@ enum Shell {
     }
 }
 
-// MARK: - Cache (instant open with last data)
-
-private struct Cache: Codable { var open: [PR]; var merged: [PR]; var updated: String }
-
 // MARK: - Store
 
 final class DashStore: ObservableObject {
@@ -132,26 +128,9 @@ final class DashStore: ObservableObject {
 
     let settings = Settings()
     private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
-    private let cachePath = "\(NSHomeDirectory())/.pi/devdash_cache.json"
     private let enrichCount = 6
 
-    init() {
-        loadTodos()
-        loadCache()   // show last-known PRs immediately
-    }
-
-    // ---- Cache ----
-    private func loadCache() {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
-              let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
-        openPRs = c.open; mergedPRs = c.merged; updated = c.updated
-    }
-    private func saveCache() {
-        let c = Cache(open: openPRs, merged: mergedPRs, updated: updated)
-        if let data = try? JSONEncoder().encode(c) {
-            try? data.write(to: URL(fileURLWithPath: cachePath))
-        }
-    }
+    init() { loadTodos() }
 
     // ---- Refresh PRs (background) ----
     func refresh() {
@@ -170,7 +149,6 @@ final class DashStore: ObservableObject {
                 self.mergedPRs = merged
                 self.updated = stamp
                 self.loading = false
-                self.saveCache()
             }
         }
     }
