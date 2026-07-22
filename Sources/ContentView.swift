@@ -268,12 +268,22 @@ struct SettingsInline: View {
 
             groupHeader("DATA")
             card {
-                HStack {
+                HStack(spacing: 6) {
                     Text("Recent window").font(.system(size: 12))
                     Spacer()
-                    Stepper("\(settings.recentDays) day\(settings.recentDays == 1 ? "" : "s")",
-                            value: $settings.recentDays, in: 1...90)
+                    TextField("", value: $settings.recentDays, format: .number)
+                        .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 42)
+                        .onSubmit {
+                            settings.recentDays = min(max(settings.recentDays, 1), 365)
+                            store.refresh()
+                        }
+                    Text("day\(settings.recentDays == 1 ? "" : "s")")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    Stepper("", value: $settings.recentDays, in: 1...365)
+                        .labelsHidden()
                         .onChange(of: settings.recentDays) { _, _ in store.refresh() }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
