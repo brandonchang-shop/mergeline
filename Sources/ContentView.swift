@@ -16,9 +16,9 @@ struct ContentView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    prSection
-                    mergedSection
-                    todoSection
+                    if store.settings.showOpenPRs { prSection }
+                    if store.settings.showMerged { mergedSection }
+                    if store.settings.showTodos { todoSection }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)
             }
@@ -47,6 +47,9 @@ struct ContentView: View {
             Button { store.generateStandup(); StandupWindowController.show(store: store) } label: {
                 Label("Standup", systemImage: "sparkles")
             }.buttonStyle(.plain).foregroundStyle(Color.purple)
+            Button { SettingsWindowController.show(store: store) } label: {
+                Image(systemName: "gearshape")
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
             Spacer()
             if !store.updated.isEmpty {
                 Text("Updated \(store.updated)").font(.caption).foregroundStyle(.secondary)
@@ -221,6 +224,76 @@ struct StandupWindowView: View {
         }
         .padding(14)
         .frame(minWidth: 320, minHeight: 220)
+    }
+}
+
+// MARK: - Settings
+
+struct SettingsView: View {
+    @ObservedObject var store: DashStore
+    @ObservedObject var settings: Settings
+    @State private var launch: Bool
+
+    init(store: DashStore) {
+        self.store = store
+        self.settings = store.settings
+        _launch = State(initialValue: store.settings.launchAtLogin)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Settings").font(.headline)
+            Divider()
+
+            Text("SECTIONS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Toggle("Open PRs", isOn: $settings.showOpenPRs)
+            Toggle("Merged · recent", isOn: $settings.showMerged)
+            Toggle("Todo", isOn: $settings.showTodos)
+
+            Divider()
+            HStack {
+                Text("Recent window")
+                Spacer()
+                Stepper("\(settings.recentDays) day\(settings.recentDays == 1 ? "" : "s")",
+                        value: $settings.recentDays, in: 1...90)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Repo filter (comma-separated, blank = all)")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextField("e.g. data-warehouse, skai-train", text: $settings.repoFilter)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Divider()
+            Toggle("Launch at login", isOn: $launch)
+                .onChange(of: launch) { _, v in settings.launchAtLogin = v }
+
+            Spacer()
+            HStack {
+                Spacer()
+                Button("Apply & Refresh") { store.refresh() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 320, height: 380)
+    }
+}
+
+enum SettingsWindowController {
+    static var window: NSWindow?
+    static func show(store: DashStore) {
+        if window == nil {
+            let w = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 320, height: 380),
+                styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            w.title = "DevDash Settings"
+            w.isReleasedWhenClosed = false
+            w.center()
+            w.contentView = NSHostingView(rootView: SettingsView(store: store))
+            window = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
     }
 }
 

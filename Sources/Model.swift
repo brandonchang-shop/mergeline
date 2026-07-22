@@ -1,15 +1,36 @@
 import AppKit
 import SwiftUI
+import ServiceManagement
 
 // MARK: - Data types
 
-struct PR: Identifiable {
-    let id: String        // url
+struct PR: Identifiable, Codable {
+    var id: String { url }
     let repo: String
     let title: String
     let url: String
-    var symbol: String = "arrow.triangle.branch"
-    var color: Color = .secondary
+    var status: String = "neutral"   // neutral|merged|approved|fail|pending|changes|draft
+
+    var symbol: String {
+        switch status {
+        case "merged":   return "arrow.triangle.merge"
+        case "approved": return "checkmark.seal.fill"
+        case "fail":     return "exclamationmark.triangle.fill"
+        case "pending":  return "clock.fill"
+        case "changes":  return "xmark.octagon.fill"
+        case "draft":    return "pencil.circle"
+        default:          return "arrow.triangle.branch"
+        }
+    }
+    var color: Color {
+        switch status {
+        case "merged", "approved": return .green
+        case "fail":               return .orange
+        case "pending":            return .yellow
+        case "changes":            return .red
+        default:                    return .secondary
+        }
+    }
 }
 
 struct Todo: Identifiable {
@@ -18,10 +39,59 @@ struct Todo: Identifiable {
     var done: Bool
 }
 
+// MARK: - Settings (persisted in UserDefaults)
+
+final class Settings: ObservableObject {
+    private let d = UserDefaults.standard
+    init() {
+        d.register(defaults: [
+            "showOpenPRs": true, "showMerged": true, "showTodos": true,
+            "recentDays": 7, "repoFilter": ""
+        ])
+    }
+    @Published var showOpenPRs = UserDefaults.standard.bool(forKey: "showOpenPRs") {
+        didSet { d.set(showOpenPRs, forKey: "showOpenPRs") }
+    }
+    @Published var showMerged = UserDefaults.standard.bool(forKey: "showMerged") {
+        didSet { d.set(showMerged, forKey: "showMerged") }
+    }
+    @Published var showTodos = UserDefaults.standard.bool(forKey: "showTodos") {
+        didSet { d.set(showTodos, forKey: "showTodos") }
+    }
+    @Published var recentDays = max(1, UserDefaults.standard.integer(forKey: "recentDays")) {
+        didSet { d.set(recentDays, forKey: "recentDays") }
+    }
+    @Published var repoFilter = UserDefaults.standard.string(forKey: "repoFilter") ?? "" {
+        didSet { d.set(repoFilter, forKey: "repoFilter") }
+    }
+
+    // Launch at login (SMAppService, macOS 13+)
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do { newValue ? try SMAppService.mainApp.register()
+                          : try SMAppService.mainApp.unregister() }
+            catch { NSLog("launchAtLogin toggle failed: \(error)") }
+            objectWillChange.send()
+        }
+    }
+
+    /// repoFilter parsed into lowercased substrings; empty = match all.
+    var repoTokens: [String] {
+        repoFilter.split(whereSeparator: { $0 == "," || $0 == " " })
+            .map { $0.lowercased() }.filter { !$0.isEmpty }
+    }
+    func matchesRepo(_ repo: String) -> Bool {
+        let tokens = repoTokens
+        if tokens.isEmpty { return true }
+        let r = repo.lowercased()
+        return tokens.contains { r.contains($0) }
+    }
+}
+
 // MARK: - Shell helper
 
 enum Shell {
-    /// Extra dirs prepended to PATH so `gh`/`jq` resolve under SwiftBar-like minimal env.
     static let extraPath = [
         "\(NSHomeDirectory())/.local/state/tec/toolchain/base_profile/bin",
         "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"
@@ -45,6 +115,10 @@ enum Shell {
     }
 }
 
+// MARK: - Cache (instant open with last data)
+
+private struct Cache: Codable { var open: [PR]; var merged: [PR]; var updated: String }
+
 // MARK: - Store
 
 final class DashStore: ObservableObject {
@@ -56,20 +130,39 @@ final class DashStore: ObservableObject {
     @Published var standupText: String? = nil
     @Published var standupLoading = false
 
+    let settings = Settings()
     private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
-    private let enrichCount = 6   // how many open PRs get a live status dot
+    private let cachePath = "\(NSHomeDirectory())/.pi/devdash_cache.json"
+    private let enrichCount = 6
 
-    init() { loadTodos() }
+    init() {
+        loadTodos()
+        loadCache()   // show last-known PRs immediately
+    }
+
+    // ---- Cache ----
+    private func loadCache() {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
+              let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
+        openPRs = c.open; mergedPRs = c.merged; updated = c.updated
+    }
+    private func saveCache() {
+        let c = Cache(open: openPRs, merged: mergedPRs, updated: updated)
+        if let data = try? JSONEncoder().encode(c) {
+            try? data.write(to: URL(fileURLWithPath: cachePath))
+        }
+    }
 
     // ---- Refresh PRs (background) ----
     func refresh() {
         loadTodos()
         if loading { return }
         loading = true
+        let days = settings.recentDays
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             let open = self.fetchPRs(extraArgs: ["--state", "open"], enrich: true)
-            let since = Self.daysAgo(7)
+            let since = Self.daysAgo(days)
             let merged = self.fetchPRs(extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
             let stamp = Self.timeStamp()
             DispatchQueue.main.async {
@@ -77,6 +170,7 @@ final class DashStore: ObservableObject {
                 self.mergedPRs = merged
                 self.updated = stamp
                 self.loading = false
+                self.saveCache()
             }
         }
     }
@@ -92,33 +186,33 @@ final class DashStore: ObservableObject {
         else { return [] }
 
         var prs: [PR] = []
-        for (i, item) in arr.enumerated() {
+        var enriched = 0
+        for item in arr {
             let title = item["title"] as? String ?? ""
             let url = item["url"] as? String ?? ""
             let repo = (item["repository"] as? [String: Any])?["name"] as? String ?? ""
-            guard !url.isEmpty else { continue }
-            var pr = PR(id: url, repo: repo, title: title, url: url)
-            if enrich && i < enrichCount {
-                (pr.symbol, pr.color) = self.status(for: url)
-            } else if !enrich {
-                pr.symbol = "arrow.triangle.merge"; pr.color = .green
+            guard !url.isEmpty, settings.matchesRepo(repo) else { continue }
+            var pr = PR(repo: repo, title: title, url: url)
+            if !enrich {
+                pr.status = "merged"
+            } else if enriched < enrichCount {
+                pr.status = self.status(for: url); enriched += 1
             }
             prs.append(pr)
         }
         return prs
     }
 
-    /// Returns (SFSymbol, color) for a PR based on review decision + CI rollup.
-    private func status(for url: String) -> (String, Color) {
+    /// Returns a status key for a PR based on review decision + CI rollup.
+    private func status(for url: String) -> String {
         let out = Shell.run(["gh", "pr", "view", url,
                              "--json", "reviewDecision,isDraft,statusCheckRollup"])
         guard let data = out.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return ("arrow.triangle.branch", .secondary) }
+        else { return "neutral" }
 
-        if obj["isDraft"] as? Bool == true { return ("pencil.circle", .secondary) }
+        if obj["isDraft"] as? Bool == true { return "draft" }
         let review = obj["reviewDecision"] as? String ?? ""
-
         var ci = "none"
         if let checks = obj["statusCheckRollup"] as? [[String: Any]] {
             var fail = false, pending = false, any = false
@@ -137,21 +231,21 @@ final class DashStore: ObservableObject {
             }
             ci = fail ? "fail" : (pending ? "pending" : (any ? "pass" : "none"))
         }
-
-        if review == "CHANGES_REQUESTED" { return ("xmark.octagon.fill", .red) }
-        if ci == "fail" { return ("exclamationmark.triangle.fill", .orange) }
-        if ci == "pending" { return ("clock.fill", .yellow) }
-        if review == "APPROVED" { return ("checkmark.seal.fill", .green) }
-        return ("arrow.triangle.branch", .secondary)
+        if review == "CHANGES_REQUESTED" { return "changes" }
+        if ci == "fail" { return "fail" }
+        if ci == "pending" { return "pending" }
+        if review == "APPROVED" { return "approved" }
+        return "neutral"
     }
 
     // ---- AI standup ----
     func generateStandup() {
         standupLoading = true
         standupText = nil
+        let days = settings.recentDays
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let since = Self.daysAgo(7)
+            let since = Self.daysAgo(days)
             let jq = ".[] | \"- \\(.repository.name): \\(.title)\""
             let merged = Shell.run(["gh", "search", "prs", "--author", "@me", "--merged",
                 "--merged-at", ">=\(since)", "--limit", "30", "--json", "title,repository", "--jq", jq])
@@ -163,7 +257,7 @@ final class DashStore: ObservableObject {
             Cover what I shipped recently, what I'm working on now, and any blockers, woven together conversationally. \
             Keep it under ~120 words, group related PRs, and don't invent anything beyond the data below.
 
-            RECENTLY MERGED (last 7 days):
+            RECENTLY MERGED (last \(days) days):
             \(merged.isEmpty ? "(none)" : merged)
 
             CURRENTLY OPEN PRS:
