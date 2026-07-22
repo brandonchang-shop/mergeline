@@ -46,8 +46,8 @@ struct ContentView: View {
                 }.buttonStyle(.plain)
                 Text(showSettings ? "Settings" : "Todo").font(.system(size: 13, weight: .bold))
             } else {
-                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 16, weight: .semibold)).foregroundStyle(.primary)
-                Text("Dev Dashboard").font(.system(size: 16, weight: .heavy))
+                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
+                Text("Dev Dashboard").font(.system(size: 14, weight: .heavy))
             }
             Spacer()
         }
