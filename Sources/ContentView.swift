@@ -19,13 +19,13 @@ struct ContentView: View {
                 SettingsInline(store: store)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if store.settings.showOpenPRs { prSection }
-                        if store.settings.showMerged { mergedSection }
-                        if store.settings.showTodos { todoSection }
+                    VStack(alignment: .leading, spacing: 0) {
+                        if store.settings.showOpenPRs { prSection; sectionDivider }
+                        if store.settings.showMerged { mergedSection; sectionDivider }
+                        if store.settings.showTodos { todoSection; sectionDivider }
                         utilitiesSection
                     }
-                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
                 }
             }
         }
@@ -37,21 +37,25 @@ struct ContentView: View {
         HStack(spacing: 6) {
             if showSettings {
                 Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false } } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                 }.buttonStyle(.plain)
-                Text("Settings").font(.system(size: 12, weight: .semibold))
+                Text("Settings").font(.system(size: 13, weight: .bold))
             } else {
-                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 12)).foregroundStyle(.primary)
-                Text("Dev Dashboard").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 13, weight: .medium)).foregroundStyle(.primary)
+                Text("Dev Dashboard").font(.system(size: 13, weight: .bold))
             }
             Spacer()
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
     }
 
+    private var sectionDivider: some View {
+        Divider().padding(.vertical, 8)
+    }
+
     // MARK: Utilities (grouped rows, like the Shopify menu-bar app)
     private var utilitiesSection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             sectionLabel("UTILITIES", "wrench.and.screwdriver")
             utilityRow("Generate standup", icon: "sparkles", tint: .purple) {
                 store.generateStandup(); StandupWindowController.show(store: store)
@@ -64,11 +68,11 @@ struct ContentView: View {
 
     private func utilityRow(_ title: String, icon: String, tint: Color, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(tint).frame(width: 14)
-                Text(title).font(.system(size: 11))
+            HStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 12)).foregroundStyle(tint).frame(width: 16)
+                Text(title).font(.system(size: 12))
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
         }.buttonStyle(HoverRow())
@@ -76,7 +80,7 @@ struct ContentView: View {
 
     // MARK: PRs
     private var prSection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             sectionLabel("OPEN PRS", "arrow.triangle.branch")
             if store.openPRs.isEmpty {
                 emptyRow(store.loading ? "Loading…" : "No open PRs")
@@ -98,11 +102,11 @@ struct ContentView: View {
 
     private func prRow(_ pr: PR) -> some View {
         Button { open(pr.url) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: pr.symbol).font(.system(size: 11)).foregroundStyle(pr.color).frame(width: 13)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(pr.title).lineLimit(1).font(.system(size: 11))
-                    Text(pr.repo).font(.system(size: 9)).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Image(systemName: pr.symbol).font(.system(size: 12)).foregroundStyle(pr.color).frame(width: 15)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(pr.title).lineLimit(1).font(.system(size: 12))
+                    Text(pr.repo).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
@@ -112,7 +116,7 @@ struct ContentView: View {
 
     // MARK: Merged
     private var mergedSection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             sectionLabel("MERGED · LAST \(store.settings.recentDays) DAY\(store.settings.recentDays == 1 ? "" : "S")", "checkmark.seal.fill")
             if store.mergedPRs.isEmpty {
                 emptyRow("Nothing merged")
@@ -124,13 +128,13 @@ struct ContentView: View {
 
     // MARK: Todos
     private var todoSection: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             sectionLabel("TODO", "checklist")
             ForEach(store.todos) { todo in todoRow(todo) }
             HStack(spacing: 6) {
-                Image(systemName: "plus.circle.fill").font(.system(size: 11)).foregroundStyle(.blue)
+                Image(systemName: "plus.circle.fill").font(.system(size: 12)).foregroundStyle(.blue)
                 TextField("Add task…", text: $newTask)
-                    .textFieldStyle(.plain).font(.system(size: 11))
+                    .textFieldStyle(.plain).font(.system(size: 12))
                     .onSubmit { store.addTodo(newTask); newTask = "" }
             }
             if store.todos.contains(where: { $0.done }) {
@@ -161,7 +165,7 @@ struct ContentView: View {
                 }.buttonStyle(.plain)
             } else {
                 Text(todo.text)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .strikethrough(todo.done)
                     .foregroundStyle(todo.done ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -178,10 +182,12 @@ struct ContentView: View {
 
     // MARK: helpers
     private func sectionLabel(_ t: String, _ icon: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 9))
-            Text(t).font(.system(size: 9, weight: .semibold)).tracking(0.5)
-        }.foregroundStyle(.secondary)
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10, weight: .bold))
+            Text(t).font(.system(size: 10, weight: .bold)).tracking(0.8)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.bottom, 2)
     }
     private func emptyRow(_ t: String) -> some View {
         Text(t).font(.system(size: 11)).foregroundStyle(.secondary)
