@@ -25,9 +25,13 @@ struct ContentView: View {
                 .padding(.horizontal, 12).padding(.vertical, 10)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    if store.settings.showOpenPRs { prSection; sectionDivider }
-                    if store.settings.showReviewRequests { reviewSection; sectionDivider }
-                    if store.settings.showMerged { mergedSection; sectionDivider }
+                    if let msg = store.ghState.message {
+                        ghBanner(msg); sectionDivider
+                    } else {
+                        if store.settings.showOpenPRs { prSection; sectionDivider }
+                        if store.settings.showReviewRequests { reviewSection; sectionDivider }
+                        if store.settings.showMerged { mergedSection; sectionDivider }
+                    }
                     utilitiesSection
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
@@ -56,6 +60,19 @@ struct ContentView: View {
 
     private var sectionDivider: some View {
         Divider().padding(.vertical, 8)
+    }
+
+    // Shown when the `gh` CLI is missing or not signed in, so lists aren't just blank.
+    private func ghBanner(_ msg: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12)).foregroundStyle(.orange).frame(width: 15)
+            Text(msg).font(.system(size: 11)).foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
     }
 
     // MARK: Utilities (grouped rows, like the Shopify menu-bar app)

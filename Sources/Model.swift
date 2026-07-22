@@ -130,12 +130,29 @@ private struct Cache: Codable {
 
 // MARK: - Store
 
+/// Health of the `gh` CLI dependency, so the UI can show a clear message
+/// instead of silently-empty lists.
+enum GHState: Equatable {
+    case ok
+    case notAuthed   // gh installed but `gh auth status` fails
+    case missing     // gh not on PATH
+
+    var message: String? {
+        switch self {
+        case .ok:        return nil
+        case .notAuthed: return "GitHub CLI isn't signed in. Run `gh auth login` in a terminal, then reopen."
+        case .missing:   return "GitHub CLI (gh) not found. Install it and run `gh auth login`."
+        }
+    }
+}
+
 final class DashStore: ObservableObject {
     @Published var openPRs: [PR] = []
     @Published var mergedPRs: [PR] = []
     @Published var reviewPRs: [PR] = []
     @Published var todos: [Todo] = []
     @Published var loading = false
+    @Published var ghState: GHState = .ok
     private var pendingRefresh = false
     @Published var updated = ""
     @Published var standupText: String? = nil
@@ -182,39 +199,60 @@ final class DashStore: ObservableObject {
         let days = settings.recentDays
         let since = Self.daysAgo(days)
         let q = DispatchQueue.global(qos: .userInitiated)
-        let group = DispatchGroup()
 
-        // Run the three gh queries concurrently and publish each section as
-        // soon as it returns (no section waits behind another).
-        group.enter()
+        // Do everything off the main thread, starting with the gh dependency
+        // check. If gh is missing/not-authed, surface a clear message and skip
+        // the fetches (which would otherwise just return empty lists).
         q.async { [weak self] in
-            defer { group.leave() }
             guard let self else { return }
-            let open = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--state", "open"], enrich: true)
-            DispatchQueue.main.async { self.openPRs = open }
-        }
-        group.enter()
-        q.async { [weak self] in
-            defer { group.leave() }
-            guard let self else { return }
-            let merged = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
-            DispatchQueue.main.async { self.mergedPRs = merged }
-        }
-        group.enter()
-        q.async { [weak self] in
-            defer { group.leave() }
-            guard let self else { return }
-            let review = self.fetchPRs(who: ["--review-requested", "@me"], extraArgs: ["--state", "open"], enrich: true)
-            DispatchQueue.main.async { self.reviewPRs = review }
-        }
+            let gh = Self.checkGH()
+            DispatchQueue.main.async { self.ghState = gh }
+            guard gh == .ok else {
+                DispatchQueue.main.async {
+                    self.loading = false
+                    if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
+                }
+                return
+            }
 
-        group.notify(queue: .main) { [weak self] in
-            guard let self else { return }
-            self.updated = Self.timeStamp()
-            self.loading = false
-            self.saveCache()
-            if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
+            // Run the three gh queries concurrently and publish each section as
+            // soon as it returns (no section waits behind another).
+            let group = DispatchGroup()
+            group.enter()
+            q.async {
+                defer { group.leave() }
+                let open = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--state", "open"], enrich: true)
+                DispatchQueue.main.async { self.openPRs = open }
+            }
+            group.enter()
+            q.async {
+                defer { group.leave() }
+                let merged = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
+                DispatchQueue.main.async { self.mergedPRs = merged }
+            }
+            group.enter()
+            q.async {
+                defer { group.leave() }
+                let review = self.fetchPRs(who: ["--review-requested", "@me"], extraArgs: ["--state", "open"], enrich: true)
+                DispatchQueue.main.async { self.reviewPRs = review }
+            }
+
+            group.notify(queue: .main) { [weak self] in
+                guard let self else { return }
+                self.updated = Self.timeStamp()
+                self.loading = false
+                self.saveCache()
+                if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
+            }
         }
+    }
+
+    /// Detect whether `gh` is installed and authenticated.
+    private static func checkGH() -> GHState {
+        if Shell.run(["gh", "--version"]).isEmpty { return .missing }
+        // `gh auth token` prints a token to stdout only when authenticated.
+        return Shell.run(["gh", "auth", "token"]).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? .notAuthed : .ok
     }
 
     private func fetchPRs(who: [String], extraArgs: [String], enrich: Bool) -> [PR] {
