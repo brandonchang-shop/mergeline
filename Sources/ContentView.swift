@@ -115,25 +115,7 @@ struct ContentView: View {
     }
 
     private func prRow(_ pr: PR) -> some View {
-        Button { open(pr.url) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: pr.symbol).font(.system(size: 12)).foregroundStyle(pr.color).frame(width: 15)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(pr.title).lineLimit(1).font(.system(size: 12))
-                    Text(pr.repo).font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(HoverRow())
-        .contextMenu {
-            Button("Open in Browser") { open(pr.url) }
-            Button("Copy URL") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(pr.url, forType: .string)
-            }
-        }
+        PRRow(pr: pr, onOpen: { open(pr.url) })
     }
 
     // MARK: Review requests
@@ -231,6 +213,54 @@ struct ContentView: View {
     }
     private func open(_ url: String) {
         if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+    }
+}
+
+/// A PR row: click title to open, hover to reveal a copy-URL icon on the right.
+struct PRRow: View {
+    let pr: PR
+    let onOpen: () -> Void
+    @State private var hover = false
+    @State private var copied = false
+
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(pr.url, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { copied = false }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onOpen) {
+                HStack(spacing: 8) {
+                    Image(systemName: pr.symbol).font(.system(size: 12)).foregroundStyle(pr.color).frame(width: 15)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(pr.title).lineLimit(1).font(.system(size: 12))
+                        Text(pr.repo).font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }.buttonStyle(.plain)
+
+            Button(action: copy) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11))
+                    .foregroundStyle(copied ? Color.green : Color.secondary)
+                    .frame(width: 14)
+            }
+            .buttonStyle(.plain)
+            .opacity(hover || copied ? 1 : 0)
+            .help("Copy URL")
+        }
+        .padding(.vertical, 1).padding(.horizontal, 3)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.08) : .clear))
+        .onHover { hover = $0 }
+        .contextMenu {
+            Button("Open in Browser", action: onOpen)
+            Button("Copy URL", action: copy)
+        }
     }
 }
 
