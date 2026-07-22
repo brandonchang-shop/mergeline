@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         host.preferredContentSize = NSSize(width: 330, height: 440)
         popover.contentViewController = host
         popover.delegate = self
+
+        store.refresh()   // warm the cache in the background at launch
     }
 
     /// Menu-bar (accessory) apps have no menu bar, so paste/copy shortcuts aren't

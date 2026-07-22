@@ -43,22 +43,25 @@ struct Todo: Identifiable {
 
 final class Settings: ObservableObject {
     private let d = UserDefaults.standard
-    init() {
-        d.register(defaults: [
-            "showOpenPRs": true, "showMerged": true, "showTodos": true,
-            "recentDays": 7, "repoFilter": ""
-        ])
+    // Read with a fallback so a missing key defaults to the intended value
+    // (avoids the "everything false" bug where stored-property init runs before register()).
+    private static func boolOr(_ key: String, _ def: Bool) -> Bool {
+        UserDefaults.standard.object(forKey: key) == nil ? def : UserDefaults.standard.bool(forKey: key)
     }
-    @Published var showOpenPRs = UserDefaults.standard.bool(forKey: "showOpenPRs") {
+    private static func intOr(_ key: String, _ def: Int) -> Int {
+        UserDefaults.standard.object(forKey: key) == nil ? def : UserDefaults.standard.integer(forKey: key)
+    }
+
+    @Published var showOpenPRs = Settings.boolOr("showOpenPRs", true) {
         didSet { d.set(showOpenPRs, forKey: "showOpenPRs") }
     }
-    @Published var showMerged = UserDefaults.standard.bool(forKey: "showMerged") {
+    @Published var showMerged = Settings.boolOr("showMerged", true) {
         didSet { d.set(showMerged, forKey: "showMerged") }
     }
-    @Published var showTodos = UserDefaults.standard.bool(forKey: "showTodos") {
+    @Published var showTodos = Settings.boolOr("showTodos", true) {
         didSet { d.set(showTodos, forKey: "showTodos") }
     }
-    @Published var recentDays = max(1, UserDefaults.standard.integer(forKey: "recentDays")) {
+    @Published var recentDays = max(1, Settings.intOr("recentDays", 7)) {
         didSet { d.set(recentDays, forKey: "recentDays") }
     }
     @Published var repoFilter = UserDefaults.standard.string(forKey: "repoFilter") ?? "" {
@@ -115,6 +118,10 @@ enum Shell {
     }
 }
 
+// MARK: - Cache (open instantly with last data)
+
+private struct Cache: Codable { var open: [PR]; var merged: [PR]; var updated: String }
+
 // MARK: - Store
 
 final class DashStore: ObservableObject {
@@ -128,9 +135,26 @@ final class DashStore: ObservableObject {
 
     let settings = Settings()
     private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
+    private let cachePath = "\(NSHomeDirectory())/.pi/devdash_cache.json"
     private let enrichCount = 6
 
-    init() { loadTodos() }
+    init() {
+        loadTodos()
+        loadCache()   // show last-known PRs immediately, before gh runs
+    }
+
+    // ---- Cache ----
+    private func loadCache() {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
+              let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
+        openPRs = c.open; mergedPRs = c.merged; updated = c.updated
+    }
+    private func saveCache() {
+        let c = Cache(open: openPRs, merged: mergedPRs, updated: updated)
+        if let data = try? JSONEncoder().encode(c) {
+            try? data.write(to: URL(fileURLWithPath: cachePath))
+        }
+    }
 
     // ---- Refresh PRs (background) ----
     func refresh() {
@@ -149,6 +173,7 @@ final class DashStore: ObservableObject {
                 self.mergedPRs = merged
                 self.updated = stamp
                 self.loading = false
+                self.saveCache()
             }
         }
     }
