@@ -68,14 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         others.forEach { $0.forceTerminate() }
     }
 
-    /// Register as a login item the first time DevDash runs (default ON).
-    /// The user can still turn it off in Settings; we only auto-enable once.
+    /// Always launch at login: register on every launch if not already enabled.
     private func enableLaunchAtLoginByDefault() {
-        let key = "didAutoEnableLogin"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        UserDefaults.standard.set(true, forKey: key)
+        guard SMAppService.mainApp.status != .enabled else { return }
         do { try SMAppService.mainApp.register() }
-        catch { NSLog("auto launch-at-login register failed: \(error)") }
+        catch { NSLog("launch-at-login register failed: \(error)") }
     }
 
     @objc func togglePopover(_ sender: Any?) {

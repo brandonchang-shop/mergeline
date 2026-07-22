@@ -249,12 +249,10 @@ struct StandupWindowView: View {
 struct SettingsInline: View {
     @ObservedObject var store: DashStore
     @ObservedObject var settings: Settings
-    @State private var launch: Bool
 
     init(store: DashStore) {
         self.store = store
         self.settings = store.settings
-        _launch = State(initialValue: store.settings.launchAtLogin)
     }
 
     var body: some View {
@@ -279,12 +277,6 @@ struct SettingsInline: View {
                         .onChange(of: settings.recentDays) { _, _ in store.refresh() }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
-            }
-
-            groupHeader("GENERAL")
-            card {
-                toggleRow("Launch at login", $launch)
-                    .onChange(of: launch) { _, v in settings.launchAtLogin = v }
             }
         }
         .padding(12)
