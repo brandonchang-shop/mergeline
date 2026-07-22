@@ -257,6 +257,9 @@ struct PRRow: View {
                         Text(pr.repo).font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 4)
+                    if pr.status == "fail" {
+                        Text("❌").font(.system(size: 10)).help("CI checks failing")
+                    }
                     if pr.humanCount > 0 {
                         Text("💬 \(pr.humanCount)").font(.system(size: 10))
                             .help("\(pr.humanCount) open human comment thread\(pr.humanCount == 1 ? "" : "s")")
