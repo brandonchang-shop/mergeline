@@ -113,7 +113,7 @@ struct ContentView: View {
     // MARK: Merged
     private var mergedSection: some View {
         VStack(alignment: .leading, spacing: 3) {
-            sectionLabel("MERGED · LAST 7 DAYS", "checkmark.seal.fill")
+            sectionLabel("MERGED · LAST \(store.settings.recentDays) DAY\(store.settings.recentDays == 1 ? "" : "S")", "checkmark.seal.fill")
             if store.mergedPRs.isEmpty {
                 emptyRow("Nothing merged")
             } else {
