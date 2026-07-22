@@ -125,7 +125,15 @@ struct ContentView: View {
                 Spacer()
             }
             .contentShape(Rectangle())
-        }.buttonStyle(HoverRow())
+        }
+        .buttonStyle(HoverRow())
+        .contextMenu {
+            Button("Open in Browser") { open(pr.url) }
+            Button("Copy URL") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(pr.url, forType: .string)
+            }
+        }
     }
 
     // MARK: Review requests
