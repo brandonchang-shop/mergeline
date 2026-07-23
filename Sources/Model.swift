@@ -172,6 +172,12 @@ final class DashStore: ObservableObject {
     @Published var reviewPRs: [PR] = []
     @Published var mentionPRs: [PR] = []
     @Published var loading = false
+    // Locally pinned PR URLs (persisted). Pinned rows sort to the top of their section.
+    @Published var pinnedURLs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "pinnedPRURLs") ?? [])
+    func togglePin(_ url: String) {
+        if pinnedURLs.contains(url) { pinnedURLs.remove(url) } else { pinnedURLs.insert(url) }
+        UserDefaults.standard.set(Array(pinnedURLs), forKey: "pinnedPRURLs")
+    }
     @Published var ghState: GHState = .ok
     private var pendingRefresh = false
     @Published var updated = ""

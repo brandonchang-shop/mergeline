@@ -193,7 +193,10 @@ struct ContentView: View {
     }
 
     private func prRow(_ pr: PR) -> some View {
-        PRRow(pr: pr, onOpen: { open(pr.url) })
+        PRRow(pr: pr,
+              onOpen: { open(pr.url) },
+              isPinned: store.pinnedURLs.contains(pr.url),
+              onTogglePin: { withAnimation(.easeInOut(duration: 0.15)) { store.togglePin(pr.url) } })
     }
 
     // MARK: Review requests
@@ -236,8 +239,12 @@ struct ContentView: View {
     // long the SECTION scrolls (capped height) instead of growing the whole window.
     @ViewBuilder
     private func prList(_ prs: [PR], expanded: Binding<Bool>) -> some View {
-        let shown = expanded.wrappedValue ? prs : Array(prs.prefix(topN))
-        if expanded.wrappedValue && prs.count > 5 {
+        // Pinned PRs float to the top of the section (stable order within each group).
+        let pinned = prs.filter { store.pinnedURLs.contains($0.url) }
+        let rest = prs.filter { !store.pinnedURLs.contains($0.url) }
+        let ordered = pinned + rest
+        let shown = expanded.wrappedValue ? ordered : Array(ordered.prefix(topN))
+        if expanded.wrappedValue && ordered.count > 5 {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(shown) { pr in prRow(pr) }
@@ -286,6 +293,8 @@ struct ContentView: View {
 struct PRRow: View {
     let pr: PR
     let onOpen: () -> Void
+    var isPinned: Bool = false
+    var onTogglePin: () -> Void = {}
     @State private var hover = false
     @State private var copied = false
 
@@ -317,6 +326,16 @@ struct PRRow: View {
                 }
                 .contentShape(Rectangle())
             }.buttonStyle(.plain)
+
+            Button(action: onTogglePin) {
+                Image(systemName: isPinned ? "star.fill" : "star")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isPinned ? Color.yellow : Color.secondary)
+                    .frame(width: 14)
+            }
+            .buttonStyle(.plain)
+            .opacity(isPinned || hover ? 1 : 0)
+            .help(isPinned ? "Unpin" : "Pin")
 
             Button(action: copy) {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
