@@ -334,13 +334,21 @@ final class DashStore: ObservableObject {
     /// Returns a status key for a PR based on review decision + CI rollup.
     private func status(for url: String) -> String {
         let out = Shell.run(["gh", "pr", "view", url,
-                             "--json", "reviewDecision,isDraft,statusCheckRollup"])
+                             "--json", "reviewDecision,isDraft,statusCheckRollup,latestReviews"])
         guard let data = out.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return "neutral" }
 
         if obj["isDraft"] as? Bool == true { return "draft" }
-        let review = obj["reviewDecision"] as? String ?? ""
+        // `reviewDecision` is only populated when reviews are REQUIRED (branch
+        // protection / CODEOWNERS). Fall back to the actual latest reviews so a
+        // plain approving review still shows as approved.
+        var review = obj["reviewDecision"] as? String ?? ""
+        if review.isEmpty, let reviews = obj["latestReviews"] as? [[String: Any]] {
+            let states = reviews.compactMap { ($0["state"] as? String)?.uppercased() }
+            if states.contains("CHANGES_REQUESTED") { review = "CHANGES_REQUESTED" }
+            else if states.contains("APPROVED") { review = "APPROVED" }
+        }
         var ci = "none"
         if let checks = obj["statusCheckRollup"] as? [[String: Any]] {
             var fail = false, pending = false, any = false
