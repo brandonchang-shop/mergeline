@@ -52,7 +52,7 @@ struct ContentView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, 10).padding(.vertical, 10)
     }
 
     private var sectionDivider: some View {
