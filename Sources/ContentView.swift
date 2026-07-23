@@ -237,7 +237,7 @@ struct ContentView: View {
     @ViewBuilder
     private func prList(_ prs: [PR], expanded: Binding<Bool>) -> some View {
         let shown = expanded.wrappedValue ? prs : Array(prs.prefix(topN))
-        if expanded.wrappedValue && prs.count > 8 {
+        if expanded.wrappedValue && prs.count > 5 {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(shown) { pr in prRow(pr) }
