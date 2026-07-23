@@ -6,11 +6,7 @@ struct ContentView: View {
     @State private var expandPRs = false
     @State private var expandReview = false
     @State private var expandMerged = false
-    @State private var newTask = ""
-    @State private var editingID: UUID?
-    @State private var editText = ""
     @State private var showSettings = false
-    @State private var showTodoList = false
     @State private var showLegend = false
 
     private let topN = 5
@@ -21,11 +17,6 @@ struct ContentView: View {
             Divider()
             if showSettings {
                 SettingsInline(store: store)
-            } else if showTodoList {
-                VStack(alignment: .leading, spacing: 0) {
-                    todoSection
-                }
-                .padding(.horizontal, 12).padding(.vertical, 10)
             } else if showLegend {
                 legendScreen
                     .padding(.horizontal, 12).padding(.vertical, 10)
@@ -50,11 +41,11 @@ struct ContentView: View {
     // MARK: header / footer
     private var header: some View {
         HStack(spacing: 6) {
-            if showSettings || showTodoList || showLegend {
-                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showTodoList = false; showLegend = false } } label: {
+            if showSettings || showLegend {
+                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showLegend = false } } label: {
                     Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                 }.buttonStyle(.plain)
-                Text(showSettings ? "Settings" : showTodoList ? "Todo" : "Legend").font(.system(size: 13, weight: .bold))
+                Text(showSettings ? "Settings" : "Legend").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
                 Text("Mergeline").font(.system(size: 14, weight: .heavy))
@@ -85,9 +76,6 @@ struct ContentView: View {
     private var utilitiesSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("UTILITIES", "wrench.and.screwdriver")
-            utilityRow("Todo", icon: "checklist", tint: .blue, badge: store.todos.filter { !$0.done }.count) {
-                withAnimation(.easeInOut(duration: 0.12)) { showTodoList = true }
-            }
             utilityRow("Icon legend", icon: "questionmark.circle", tint: .secondary) {
                 withAnimation(.easeInOut(duration: 0.12)) { showLegend = true }
             }
@@ -251,59 +239,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Todos
-    private var todoSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            sectionLabel("TODO", "checklist")
-            ForEach(store.todos) { todo in todoRow(todo) }
-            HStack(spacing: 6) {
-                Image(systemName: "plus.circle.fill").font(.system(size: 12)).foregroundStyle(.blue)
-                TextField("Add task…", text: $newTask)
-                    .textFieldStyle(.plain).font(.system(size: 12))
-                    .onSubmit { store.addTodo(newTask); newTask = "" }
-            }
-            if store.todos.contains(where: { $0.done }) {
-                Button { store.clearCompleted() } label: {
-                    Label("Clear completed", systemImage: "trash").font(.system(size: 10)).foregroundStyle(.secondary)
-                }.buttonStyle(.plain)
-            }
-        }
-    }
-
-    private func todoRow(_ todo: Todo) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Button { store.toggle(todo) } label: {
-                Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(todo.done ? .green : .secondary)
-            }.buttonStyle(.plain)
-
-            if editingID == todo.id {
-                TextField("", text: $editText, axis: .vertical)
-                    .textFieldStyle(.plain).font(.system(size: 11))
-                    .lineLimit(1...10)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onSubmit { store.edit(todo, to: editText); editingID = nil }
-                Button { store.edit(todo, to: editText); editingID = nil } label: {
-                    Image(systemName: "checkmark").font(.system(size: 10)).foregroundStyle(.green)
-                }.buttonStyle(.plain)
-            } else {
-                Text(todo.text)
-                    .font(.system(size: 12))
-                    .strikethrough(todo.done)
-                    .foregroundStyle(todo.done ? .secondary : .primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button { editingID = todo.id; editText = todo.text } label: {
-                    Image(systemName: "pencil").font(.system(size: 10)).foregroundStyle(.secondary)
-                }.buttonStyle(.plain).opacity(0.7)
-                Button { store.delete(todo) } label: {
-                    Image(systemName: "trash").font(.system(size: 10)).foregroundStyle(.secondary)
-                }.buttonStyle(.plain).opacity(0.7)
-            }
-        }
-    }
 
     // MARK: helpers
     private func sectionLabel(_ t: String, _ icon: String) -> some View {

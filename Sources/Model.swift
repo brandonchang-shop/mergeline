@@ -54,12 +54,6 @@ struct PR: Identifiable, Codable {
     }
 }
 
-struct Todo: Identifiable {
-    let id = UUID()
-    var text: String
-    var done: Bool
-}
-
 // MARK: - Settings (persisted in UserDefaults)
 
 final class Settings: ObservableObject {
@@ -78,9 +72,6 @@ final class Settings: ObservableObject {
     }
     @Published var showMerged = Settings.boolOr("showMerged", true) {
         didSet { d.set(showMerged, forKey: "showMerged") }
-    }
-    @Published var showTodos = Settings.boolOr("showTodos", true) {
-        didSet { d.set(showTodos, forKey: "showTodos") }
     }
     @Published var showReviewRequests = Settings.boolOr("showReviewRequests", true) {
         didSet { d.set(showReviewRequests, forKey: "showReviewRequests") }
@@ -175,20 +166,17 @@ final class DashStore: ObservableObject {
     @Published var openPRs: [PR] = []
     @Published var mergedPRs: [PR] = []
     @Published var reviewPRs: [PR] = []
-    @Published var todos: [Todo] = []
     @Published var loading = false
     @Published var ghState: GHState = .ok
     private var pendingRefresh = false
     @Published var updated = ""
 
     let settings = Settings()
-    private let todoPath = "\(NSHomeDirectory())/.pi/todo.md"
     private let cachePath = "\(NSHomeDirectory())/.pi/mergeline_cache.json"
     private let enrichCount = 6
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        loadTodos()
         loadCache()   // show last-known PRs immediately, before gh runs
         // Re-publish settings changes so views watching the store re-render
         // (e.g. toggling a section updates the main view instantly).
@@ -213,7 +201,6 @@ final class DashStore: ObservableObject {
 
     // ---- Refresh PRs (background) ----
     func refresh() {
-        loadTodos()
         // If a refresh is already running, don't drop this request — remember it
         // and re-run once the current one finishes (picks up the latest settings,
         // e.g. a changed recent-days window).
@@ -411,46 +398,6 @@ final class DashStore: ObservableObject {
         }
         return (human, bot)
     }
-
-    // ---- Todos (read/write ~/.pi/todo.md) ----
-    func loadTodos() {
-        var result: [Todo] = []
-        if let content = try? String(contentsOfFile: todoPath, encoding: .utf8) {
-            for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
-                let s = String(line)
-                if let r = s.range(of: #"^\s*-\s*\[ \]\s*"#, options: .regularExpression) {
-                    result.append(Todo(text: String(s[r.upperBound...]), done: false))
-                } else if let r = s.range(of: #"^\s*-\s*\[[xX]\]\s*"#, options: .regularExpression) {
-                    result.append(Todo(text: String(s[r.upperBound...]), done: true))
-                }
-            }
-        }
-        todos = result
-    }
-
-    private func saveTodos() {
-        var lines = ["# Todo"]
-        for t in todos { lines.append("- [\(t.done ? "x" : " ")] \(t.text)") }
-        try? (lines.joined(separator: "\n") + "\n").write(toFile: todoPath, atomically: true, encoding: .utf8)
-    }
-
-    func addTodo(_ text: String) {
-        let t = text.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty else { return }
-        todos.append(Todo(text: t, done: false)); saveTodos()
-    }
-    func toggle(_ todo: Todo) {
-        guard let i = todos.firstIndex(where: { $0.id == todo.id }) else { return }
-        todos[i].done.toggle(); saveTodos()
-    }
-    func edit(_ todo: Todo, to newText: String) {
-        guard let i = todos.firstIndex(where: { $0.id == todo.id }) else { return }
-        todos[i].text = newText.trimmingCharacters(in: .whitespaces); saveTodos()
-    }
-    func delete(_ todo: Todo) {
-        todos.removeAll { $0.id == todo.id }; saveTodos()
-    }
-    func clearCompleted() { todos.removeAll { $0.done }; saveTodos() }
 
     // ---- helpers ----
     static func daysAgo(_ n: Int) -> String {
