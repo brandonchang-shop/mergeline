@@ -5,6 +5,7 @@ struct ContentView: View {
     @ObservedObject var store: DashStore
     @State private var expandPRs = false
     @State private var expandReview = false
+    @State private var expandMention = false
     @State private var expandMerged = false
     @State private var showSettings = false
     @State private var showLegend = false
@@ -27,6 +28,7 @@ struct ContentView: View {
                     } else {
                         if store.settings.showOpenPRs { prSection; sectionDivider }
                         if store.settings.showReviewRequests { reviewSection; sectionDivider }
+                        if store.settings.showMentions { mentionSection; sectionDivider }
                         if store.settings.showMerged { mergedSection; sectionDivider }
                     }
                     utilitiesSection
@@ -203,6 +205,18 @@ struct ContentView: View {
         }
     }
 
+    // MARK: Mentions
+    private var mentionSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            sectionLabel("MENTIONS", "at")
+            if store.mentionPRs.isEmpty {
+                emptyRow(store.loading ? "Loading…" : "No mentions")
+            } else {
+                prList(store.mentionPRs, expanded: $expandMention)
+            }
+        }
+    }
+
     // MARK: Merged
     private var mergedSection: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -359,6 +373,8 @@ struct SettingsInline: View {
                 toggleRow("Open PRs", $settings.showOpenPRs)
                 rowDivider
                 toggleRow("Review requests", $settings.showReviewRequests)
+                rowDivider
+                toggleRow("Mentions", $settings.showMentions)
                 rowDivider
                 toggleRow("Merged", $settings.showMerged)
             }

@@ -76,6 +76,9 @@ final class Settings: ObservableObject {
     @Published var showReviewRequests = Settings.boolOr("showReviewRequests", true) {
         didSet { d.set(showReviewRequests, forKey: "showReviewRequests") }
     }
+    @Published var showMentions = Settings.boolOr("showMentions", true) {
+        didSet { d.set(showMentions, forKey: "showMentions") }
+    }
     // When false (default), Review Requests shows only PRs requested from you
     // directly; when true, also includes ones requested via your teams.
     @Published var includeTeamReviews = Settings.boolOr("includeTeamReviews", false) {
@@ -141,6 +144,7 @@ private struct Cache: Codable {
     var open: [PR]
     var merged: [PR]
     var review: [PR]? = nil
+    var mention: [PR]? = nil
     var updated: String
 }
 
@@ -166,6 +170,7 @@ final class DashStore: ObservableObject {
     @Published var openPRs: [PR] = []
     @Published var mergedPRs: [PR] = []
     @Published var reviewPRs: [PR] = []
+    @Published var mentionPRs: [PR] = []
     @Published var loading = false
     @Published var ghState: GHState = .ok
     private var pendingRefresh = false
@@ -190,10 +195,10 @@ final class DashStore: ObservableObject {
     private func loadCache() {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
               let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
-        openPRs = c.open; mergedPRs = c.merged; reviewPRs = c.review ?? []; updated = c.updated
+        openPRs = c.open; mergedPRs = c.merged; reviewPRs = c.review ?? []; mentionPRs = c.mention ?? []; updated = c.updated
     }
     private func saveCache() {
-        let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, updated: updated)
+        let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, mention: mentionPRs, updated: updated)
         if let data = try? JSONEncoder().encode(c) {
             try? data.write(to: URL(fileURLWithPath: cachePath))
         }
@@ -252,9 +257,19 @@ final class DashStore: ObservableObject {
                 let review = self.fetchPRs(who: reviewWho, extraArgs: ["--state", "open"], enrich: true)
                 DispatchQueue.main.async { self.reviewPRs = review }
             }
+            group.enter()
+            q.async {
+                defer { group.leave() }
+                // Open PRs where I'm @mentioned (body or comments), incl. PRs I don't own.
+                let mentions = self.fetchPRs(who: ["--mentions", "@me"], extraArgs: ["--state", "open"], enrich: true)
+                DispatchQueue.main.async { self.mentionPRs = mentions }
+            }
 
             group.notify(queue: .main) { [weak self] in
                 guard let self else { return }
+                // Drop mention PRs I authored (already in Open PRs) to avoid duplicates.
+                let openURLs = Set(self.openPRs.map(\.url))
+                self.mentionPRs.removeAll { openURLs.contains($0.url) }
                 self.updated = Self.timeStamp()
                 self.loading = false
                 self.saveCache()
