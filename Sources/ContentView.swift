@@ -107,6 +107,9 @@ struct ContentView: View {
                 ("💬", "Open threads from people — need a response"),
                 ("🤖", "Open threads from bots (binks, orc, CI)"),
             ])
+            legendGroupEmoji("SECTIONS", [
+                ("@", "Mentions = open PRs where you're @mentioned (incl. others' PRs)"),
+            ])
             legendGroupEmoji("ROW ACTIONS", [
                 ("🖱", "Click a PR to open it in the browser"),
                 ("⎘", "Hover a row → copy-URL icon on the right"),
