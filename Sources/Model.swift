@@ -336,7 +336,10 @@ final class DashStore: ObservableObject {
             let d = new.human - old.human
             return "\(d) new comment\(d == 1 ? "" : "s")"
         }
-        if new.bot > old.bot { return "New bot comment" }
+        if new.bot > old.bot {
+            let d = new.bot - old.bot
+            return "\(d) new bot comment\(d == 1 ? "" : "s")"
+        }
         return nil
     }
 
