@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var editText = ""
     @State private var showSettings = false
     @State private var showTodoList = false
+    @State private var showLegend = false
 
     private let topN = 5
 
@@ -25,6 +26,9 @@ struct ContentView: View {
                     todoSection
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
+            } else if showLegend {
+                legendScreen
+                    .padding(.horizontal, 12).padding(.vertical, 10)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     if let msg = store.ghState.message {
@@ -46,11 +50,11 @@ struct ContentView: View {
     // MARK: header / footer
     private var header: some View {
         HStack(spacing: 6) {
-            if showSettings || showTodoList {
-                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showTodoList = false } } label: {
+            if showSettings || showTodoList || showLegend {
+                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showTodoList = false; showLegend = false } } label: {
                     Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                 }.buttonStyle(.plain)
-                Text(showSettings ? "Settings" : "Todo").font(.system(size: 13, weight: .bold))
+                Text(showSettings ? "Settings" : showTodoList ? "Todo" : "Legend").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
                 Text("Mergeline").font(.system(size: 14, weight: .heavy))
@@ -84,10 +88,82 @@ struct ContentView: View {
             utilityRow("Todo", icon: "checklist", tint: .blue, badge: store.todos.filter { !$0.done }.count) {
                 withAnimation(.easeInOut(duration: 0.12)) { showTodoList = true }
             }
+            utilityRow("Icon legend", icon: "questionmark.circle", tint: .secondary) {
+                withAnimation(.easeInOut(duration: 0.12)) { showLegend = true }
+            }
             utilityRow("Settings", icon: "gearshape", tint: .secondary) {
                 withAnimation(.easeInOut(duration: 0.12)) { showSettings = true }
             }
         }
+    }
+
+    // MARK: Legend (what the icons mean)
+    private var legendScreen: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            legendGroup("PR STATUS", [
+                ("arrow.triangle.branch", Color.secondary, "Open — no review/CI signal yet"),
+                ("clock.fill", .yellow, "CI checks running"),
+                ("exclamationmark.triangle.fill", .orange, "CI checks failing"),
+                ("xmark.octagon.fill", .red, "Changes requested"),
+                ("checkmark.seal.fill", .green, "Approved"),
+                ("pencil.circle", .secondary, "Draft"),
+                ("arrow.triangle.merge", .green, "Merged"),
+            ])
+            legendGroupEmoji("COMMENTS (unresolved threads)", [
+                ("💬", "Open threads from people — need a response"),
+                ("🤖", "Open threads from bots (binks, orc, CI)"),
+            ])
+            legendGroupEmoji("ROW ACTIONS", [
+                ("🖱", "Click a PR to open it in the browser"),
+                ("⎘", "Hover a row → copy-URL icon on the right"),
+            ])
+        }
+        .frame(width: 340, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func legendGroup(_ title: String, _ rows: [(String, Color, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            groupHeaderText(title)
+            card {
+                ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+                    if i > 0 { rowDividerInset }
+                    HStack(spacing: 10) {
+                        Image(systemName: r.0).font(.system(size: 12)).foregroundStyle(r.1).frame(width: 18)
+                        Text(r.2).font(.system(size: 12))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private func legendGroupEmoji(_ title: String, _ rows: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            groupHeaderText(title)
+            card {
+                ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+                    if i > 0 { rowDividerInset }
+                    HStack(spacing: 10) {
+                        Text(r.0).font(.system(size: 13)).frame(width: 18)
+                        Text(r.1).font(.system(size: 12))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private func groupHeaderText(_ t: String) -> some View {
+        Text(t).font(.system(size: 10, weight: .bold)).tracking(0.8)
+            .foregroundStyle(.secondary).padding(.leading, 4)
+    }
+    private var rowDividerInset: some View { Divider().padding(.leading, 10) }
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
     }
 
     private func utilityRow(_ title: String, icon: String, tint: Color, badge: Int = 0, _ action: @escaping () -> Void) -> some View {
