@@ -333,10 +333,19 @@ struct HoverRow: ButtonStyle {
 struct SettingsInline: View {
     @ObservedObject var store: DashStore
     @ObservedObject var settings: Settings
+    @State private var daysText: String
 
     init(store: DashStore) {
         self.store = store
         self.settings = store.settings
+        _daysText = State(initialValue: String(store.settings.recentDays))
+    }
+
+    private func commitDays() {
+        let n = min(max(Int(daysText) ?? settings.recentDays, 1), 365)
+        settings.recentDays = n
+        daysText = String(n)
+        store.refresh()
     }
 
     var body: some View {
@@ -357,16 +366,18 @@ struct SettingsInline: View {
                     Spacer()
                     // Editable "N days" pill that blends with the card styling.
                     HStack(spacing: 3) {
-                        TextField("", value: $settings.recentDays, format: .number)
+                        TextField("", text: $daysText)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .medium))
                             .multilineTextAlignment(.trailing)
                             .frame(width: 26)
-                            .onSubmit {
-                                settings.recentDays = min(max(settings.recentDays, 1), 365)
-                                store.refresh()
+                            // Keep only digits as the user types.
+                            .onChange(of: daysText) { _, v in
+                                let digits = v.filter(\.isNumber)
+                                if digits != v { daysText = digits }
                             }
-                        Text(settings.recentDays == 1 ? "day" : "days")
+                            .onSubmit { commitDays() }
+                        Text((Int(daysText) ?? settings.recentDays) == 1 ? "day" : "days")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 8).padding(.vertical, 3)
@@ -374,7 +385,7 @@ struct SettingsInline: View {
                     Stepper("", value: $settings.recentDays, in: 1...365)
                         .labelsHidden()
                         .controlSize(.small)
-                        .onChange(of: settings.recentDays) { _, _ in store.refresh() }
+                        .onChange(of: settings.recentDays) { _, v in daysText = String(v); store.refresh() }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
             }
