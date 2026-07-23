@@ -118,8 +118,7 @@ struct ContentView: View {
                 ("⎘", "Hover a row → copy-URL icon on the right"),
             ])
         }
-        .frame(width: 340, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func legendGroup(_ title: String, _ rows: [(String, Color, String)]) -> some View {
