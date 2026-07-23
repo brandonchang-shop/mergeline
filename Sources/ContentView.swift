@@ -10,7 +10,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showLegend = false
 
-    private let topN = 4
+    private let topN = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -243,7 +243,7 @@ struct ContentView: View {
                     ForEach(shown) { pr in prRow(pr) }
                 }
             }
-            .frame(maxHeight: 220)
+            .frame(maxHeight: 170)
         } else {
             ForEach(shown) { pr in prRow(pr) }
         }
