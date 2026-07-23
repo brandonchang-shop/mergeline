@@ -20,12 +20,8 @@ struct ContentView: View {
             if showSettings {
                 SettingsInline(store: store)
             } else if showLegend {
-                ScrollView {
-                    legendScreen
-                        .padding(.leading, 12).padding(.trailing, 20).padding(.vertical, 10)
-                }
-                .frame(maxHeight: 460)
-                .scrollIndicators(.visible)
+                legendScreen
+                    .padding(.horizontal, 12).padding(.vertical, 10)
             } else if showNotifs {
                 notifsScreen
                     .padding(.horizontal, 12).padding(.vertical, 10)
