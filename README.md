@@ -37,12 +37,11 @@ open build/Mergeline.app
 The `</>` icon appears in your menu bar. Click it. Done.
 
 ## Updating
+One command pulls, rebuilds, and restarts the app:
 ```bash
-cd ~/Mergeline
-git pull
-./build.sh
-open build/Mergeline.app
+cd ~/Mergeline && ./update.sh
 ```
+(Equivalent to `git pull && ./build.sh && pkill -x Mergeline; open build/Mergeline.app`.)
 No re-approval needed — each local build is auto-trusted.
 
 ## Troubleshooting
