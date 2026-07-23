@@ -103,4 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         if let m = outsideClickMonitor { NSEvent.removeMonitor(m); outsideClickMonitor = nil }
     }
+
+    /// Defensive teardown: if the app is backgrounded while the popover is open
+    /// (screen lock, fast-user-switch, Exposé) close it so the global click
+    /// monitor is always removed — avoids a dangling monitor firing on later clicks.
+    func applicationWillResignActive(_ notification: Notification) {
+        if popover.isShown { popover.performClose(nil) }
+    }
 }

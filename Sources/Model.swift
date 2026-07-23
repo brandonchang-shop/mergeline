@@ -161,6 +161,7 @@ private struct Cache: Codable {
     var updated: String
     var snapshot: [String: PRSnap]? = nil   // baseline for change detection
     var notifs: [Notif]? = nil              // in-app activity feed
+    var baseline: Bool? = nil               // have we recorded a first baseline yet
 }
 
 // MARK: - Store
@@ -205,6 +206,11 @@ final class DashStore: ObservableObject {
     @Published var notifications: [Notif] = []
     var unreadCount: Int { notifications.reduce(0) { $0 + ($1.read ? 0 : 1) } }
     private var snapshot: [String: PRSnap] = [:]
+    // Whether we've recorded at least one baseline. Distinct from snapshot.isEmpty
+    // (which is also empty after a zero-PR fetch) so notifications aren't lost.
+    private var hasSnapshotBaseline = false
+    // gh dependency state, cached once OK (checkGH spawns 2 subprocesses).
+    private var cachedGH: GHState? = nil
 
     let settings = Settings()
     private let cachePath = "\(NSHomeDirectory())/.pi/mergeline_cache.json"
@@ -231,6 +237,7 @@ final class DashStore: ObservableObject {
         openPRs = c.open; mergedPRs = c.merged; reviewPRs = c.review ?? []; mentionPRs = c.mention ?? []; updated = c.updated
         notifications = c.notifs ?? []
         snapshot = c.snapshot ?? [:]
+        hasSnapshotBaseline = c.baseline ?? !snapshot.isEmpty
         hasLoaded = true   // we have prior data; don't show first-load spinner
     }
     private func saveCache() {
@@ -238,12 +245,19 @@ final class DashStore: ObservableObject {
         // stall on slow/encrypted/network home dirs). 0600 keeps PR titles/URLs
         // private on shared machines.
         let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, mention: mentionPRs,
-                      updated: updated, snapshot: snapshot, notifs: notifications)
+                      updated: updated, snapshot: snapshot, notifs: notifications,
+                      baseline: hasSnapshotBaseline)
         let path = cachePath
         cacheQueue.async {
             guard let data = try? JSONEncoder().encode(c) else { return }
-            try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+            // Write to a temp file, chmod 0600 BEFORE it's in place, then rename
+            // atomically — no window where the file is world-readable.
+            let tmp = path + ".tmp"
+            do {
+                try data.write(to: URL(fileURLWithPath: tmp))
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tmp)
+                _ = rename(tmp, path)
+            } catch { try? FileManager.default.removeItem(atPath: tmp) }
         }
     }
 
@@ -259,12 +273,17 @@ final class DashStore: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let gh = Self.checkGH()
+            // Re-check gh only until it's OK once; the auth/install state rarely
+            // changes, and checkGH spawns two subprocesses.
+            let gh: GHState
+            if self.cachedGH == .ok { gh = .ok }
+            else { gh = Self.checkGH(); if gh == .ok { self.cachedGH = .ok } }
             DispatchQueue.main.async { self.ghState = gh }
             guard gh == .ok else {
                 DispatchQueue.main.async {
                     self.loading = false
-                    if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
+                    if self.pendingRefresh { self.pendingRefresh = false
+                        DispatchQueue.main.async { self.refresh() } }
                 }
                 return
             }
@@ -292,7 +311,10 @@ final class DashStore: ObservableObject {
                     self.saveCache()
                 }
                 self.loading = false
-                if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
+                // Yield to the run loop before a coalesced re-run so the UI can
+                // render between fetches (avoids a permanently-stuck spinner).
+                if self.pendingRefresh { self.pendingRefresh = false
+                    DispatchQueue.main.async { self.refresh() } }
             }
         }
     }
@@ -301,23 +323,35 @@ final class DashStore: ObservableObject {
     /// Diffs the fresh PR set against the last snapshot and appends notifications
     /// for anything that changed. First run only records the baseline (no spam).
     private func detectChanges(_ prs: [PR]) {
-        let firstRun = snapshot.isEmpty
-        var newSnap: [String: PRSnap] = [:]
+        let firstRun = !hasSnapshotBaseline
         var events: [Notif] = []
+        var seenThisFetch = Set<String>()
         for pr in prs {
-            if newSnap[pr.url] != nil { continue }   // a url can appear in 2 sections
+            if seenThisFetch.contains(pr.url) { continue }   // a url can appear in 2 sections
+            seenThisFetch.insert(pr.url)
             let ns = PRSnap(status: pr.status, human: pr.humanCount, bot: pr.botCount)
             let old = snapshot[pr.url]
-            newSnap[pr.url] = ns
+            // MERGE (not replace): carry the new state forward but keep baselines
+            // for PRs absent from this fetch, so a PR that briefly drops out of
+            // GitHub search doesn't look "new" when it returns.
+            snapshot[pr.url] = ns
             guard !firstRun, let change = Self.changeString(old: old, new: ns) else { continue }
-            events.append(Notif(id: "\(pr.url)#\(change)", url: pr.url, title: pr.title,
+            events.append(Notif(id: "\(pr.url)#\(Self.dedupKey(change))", url: pr.url, title: pr.title,
                                 repo: pr.repo, change: change, at: Date(), read: false))
         }
-        snapshot = newSnap
+        hasSnapshotBaseline = true
         guard !events.isEmpty else { return }
         // Prepend, collapse identical (url+change) repeats, cap at 50.
         var seen = Set<String>()
         notifications = Array((events + notifications).filter { seen.insert($0.id).inserted }.prefix(50))
+    }
+
+    /// Dedup key for a change: comment notifications collapse by TYPE (not count)
+    /// so "1 new comment" then "2 new comments" on the same PR replace, not stack.
+    private static func dedupKey(_ change: String) -> String {
+        if change.contains("bot comment") { return "bot_comment" }
+        if change.contains("new comment") { return "human_comment" }
+        return change
     }
 
     /// Human-readable description of what changed, or nil if nothing notable.
