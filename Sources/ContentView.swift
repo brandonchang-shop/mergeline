@@ -352,22 +352,28 @@ struct SettingsInline: View {
 
             groupHeader("DATA")
             card {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Text("Recent window").font(.system(size: 12))
                     Spacer()
-                    TextField("", value: $settings.recentDays, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12))
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 42)
-                        .onSubmit {
-                            settings.recentDays = min(max(settings.recentDays, 1), 365)
-                            store.refresh()
-                        }
-                    Text("day\(settings.recentDays == 1 ? "" : "s")")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    // Editable "N days" pill that blends with the card styling.
+                    HStack(spacing: 3) {
+                        TextField("", value: $settings.recentDays, format: .number)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12, weight: .medium))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 26)
+                            .onSubmit {
+                                settings.recentDays = min(max(settings.recentDays, 1), 365)
+                                store.refresh()
+                            }
+                        Text(settings.recentDays == 1 ? "day" : "days")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
                     Stepper("", value: $settings.recentDays, in: 1...365)
                         .labelsHidden()
+                        .controlSize(.small)
                         .onChange(of: settings.recentDays) { _, _ in store.refresh() }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
