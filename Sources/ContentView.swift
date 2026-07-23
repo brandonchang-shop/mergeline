@@ -222,7 +222,7 @@ struct ContentView: View {
                     ForEach(shown) { pr in prRow(pr) }
                 }
             }
-            .frame(maxHeight: 300)
+            .frame(maxHeight: 220)
         } else {
             ForEach(shown) { pr in prRow(pr) }
         }
