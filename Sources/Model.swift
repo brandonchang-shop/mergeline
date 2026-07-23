@@ -172,6 +172,10 @@ final class DashStore: ObservableObject {
     @Published var reviewPRs: [PR] = []
     @Published var mentionPRs: [PR] = []
     @Published var loading = false
+    // True once at least one fetch (or a cache load) has populated the sections.
+    // Used so empty sections show "No X" instead of spinning "Loading…" during
+    // every background refresh — only the very first load shows "Loading…".
+    @Published var hasLoaded = false
     // Locally pinned PR URLs (persisted). Pinned rows sort to the top of their section.
     @Published var pinnedURLs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "pinnedPRURLs") ?? [])
     func togglePin(_ url: String) {
@@ -202,6 +206,7 @@ final class DashStore: ObservableObject {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
               let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
         openPRs = c.open; mergedPRs = c.merged; reviewPRs = c.review ?? []; mentionPRs = c.mention ?? []; updated = c.updated
+        hasLoaded = true   // we have prior data; don't show first-load spinner
     }
     private func saveCache() {
         let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, mention: mentionPRs, updated: updated)
@@ -247,6 +252,7 @@ final class DashStore: ObservableObject {
                 self.mentionPRs = sections.mention.filter { !openURLs.contains($0.url) }
                 self.updated = Self.timeStamp()
                 self.loading = false
+                self.hasLoaded = true
                 self.saveCache()
                 if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
             }

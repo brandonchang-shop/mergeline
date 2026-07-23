@@ -186,7 +186,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("OPEN PRS", "arrow.triangle.branch")
             if store.openPRs.isEmpty {
-                emptyRow(store.loading ? "Loading…" : "No open PRs")
+                emptyRow(store.loading && !store.hasLoaded ? "Loading…" : "No open PRs")
             } else {
                 prList(store.openPRs, expanded: $expandPRs)
             }
@@ -205,7 +205,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("REVIEW REQUESTS", "eye")
             if store.reviewPRs.isEmpty {
-                emptyRow(store.loading ? "Loading…" : "No review requests")
+                emptyRow(store.loading && !store.hasLoaded ? "Loading…" : "No review requests")
             } else {
                 prList(store.reviewPRs, expanded: $expandReview)
             }
@@ -217,7 +217,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("MENTIONS", "at")
             if store.mentionPRs.isEmpty {
-                emptyRow(store.loading ? "Loading…" : "No mentions")
+                emptyRow(store.loading && !store.hasLoaded ? "Loading…" : "No mentions")
             } else {
                 prList(store.mentionPRs, expanded: $expandMention)
             }
@@ -229,7 +229,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("MERGED · LAST \(store.settings.recentDays) DAY\(store.settings.recentDays == 1 ? "" : "S")", "checkmark.seal.fill")
             if store.mergedPRs.isEmpty {
-                emptyRow(store.loading ? "Loading…" : "Nothing merged")
+                emptyRow(store.loading && !store.hasLoaded ? "Loading…" : "Nothing merged")
             } else {
                 prList(store.mergedPRs, expanded: $expandMerged)
             }
