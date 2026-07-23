@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var expandMerged = false
     @State private var showSettings = false
     @State private var showLegend = false
+    @State private var showNotifs = false
 
     private let topN = 3
 
@@ -20,6 +21,9 @@ struct ContentView: View {
                 SettingsInline(store: store)
             } else if showLegend {
                 legendScreen
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+            } else if showNotifs {
+                notifsScreen
                     .padding(.horizontal, 12).padding(.vertical, 10)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
@@ -43,19 +47,20 @@ struct ContentView: View {
     // MARK: header / footer
     private var header: some View {
         HStack(spacing: 6) {
-            if showSettings || showLegend {
-                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showLegend = false } } label: {
+            if showSettings || showLegend || showNotifs {
+                Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showLegend = false; showNotifs = false } } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                         Text("Back").font(.system(size: 13, weight: .semibold))
                     }
                 }.buttonStyle(HoverRow())
                 Spacer()
-                Text(showSettings ? "Settings" : "Legend").font(.system(size: 13, weight: .bold))
+                Text(showSettings ? "Settings" : showLegend ? "Legend" : "Notifications").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
                 Text("Mergeline").font(.system(size: 14, weight: .heavy))
                 Spacer()
+                bellButton
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
@@ -63,6 +68,86 @@ struct ContentView: View {
 
     private var sectionDivider: some View {
         Divider().padding(.vertical, 8)
+    }
+
+    // Bell + unread badge (header, main screen only). Opening marks all read.
+    private var bellButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.12)) { showNotifs = true }
+            store.markAllRead()
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: store.unreadCount > 0 ? "bell.badge.fill" : "bell")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(store.unreadCount > 0 ? Color.primary : Color.secondary)
+                if store.unreadCount > 0 {
+                    Text("\(min(store.unreadCount, 99))")
+                        .font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.red))
+                        .offset(x: 8, y: -7)
+                }
+            }
+        }.buttonStyle(HoverRow())
+    }
+
+    // MARK: Notifications (in-app activity feed)
+    private var notifsScreen: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if store.notifications.isEmpty {
+                Text("No new activity").font(.system(size: 12)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 24)
+            } else {
+                HStack {
+                    groupHeaderText("RECENT ACTIVITY")
+                    Spacer()
+                    Button("Clear") { store.clearNotifications() }
+                        .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                ScrollView {
+                    card {
+                        ForEach(Array(store.notifications.enumerated()), id: \.element.id) { i, n in
+                            if i > 0 { rowDividerInset }
+                            Button { open(n.url) } label: {
+                                HStack(spacing: 9) {
+                                    Image(systemName: changeIcon(n.change)).font(.system(size: 12))
+                                        .foregroundStyle(changeColor(n.change)).frame(width: 16)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(n.title).font(.system(size: 12)).lineLimit(1)
+                                        Text("\(n.change) · \(n.repo)").font(.system(size: 10))
+                                            .foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                    Spacer(minLength: 6)
+                                    Text(DashStore.relativeTime(n.at)).font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .contentShape(Rectangle())
+                            }.buttonStyle(HoverRow())
+                        }
+                    }
+                }
+                .frame(maxHeight: 320)
+                .scrollIndicators(.visible)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func changeIcon(_ c: String) -> String {
+        if c.hasPrefix("Approved") { return "checkmark.seal.fill" }
+        if c.hasPrefix("Changes")  { return "xmark.octagon.fill" }
+        if c.hasPrefix("CI failed") { return "exclamationmark.triangle.fill" }
+        if c == "Merged" { return "arrow.triangle.merge" }
+        if c == "New pull request" { return "plus.circle" }
+        if c.contains("bot") { return "cpu" }
+        return "bubble.left.fill"
+    }
+    private func changeColor(_ c: String) -> Color {
+        if c.hasPrefix("Approved") || c == "Merged" { return .green }
+        if c.hasPrefix("Changes")  { return .red }
+        if c.hasPrefix("CI failed") { return .orange }
+        return .secondary
     }
 
     // Shown when the `gh` CLI is missing or not signed in, so lists aren't just blank.
