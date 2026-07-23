@@ -112,7 +112,7 @@ struct ContentView: View {
             ])
             legendGroupEmoji("ROW ACTIONS", [
                 ("🖱", "Click a PR to open it in the browser"),
-                ("★", "Star to pin — pinned PRs sort to top of section"),
+                ("★", "Star to pin (sorts to top of section)"),
                 ("⎘", "Hover a row → copy-URL icon on the right"),
             ])
         }
