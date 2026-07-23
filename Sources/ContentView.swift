@@ -216,10 +216,7 @@ struct ContentView: View {
             ])
             legendGroup("NOTIFICATIONS", [
                 ("plus.circle", .secondary, "A new pull request appeared"),
-                ("checkmark.seal.fill", .green, "A PR was approved"),
-                ("xmark.octagon.fill", .red, "Changes were requested"),
-                ("exclamationmark.triangle.fill", .orange, "CI started failing"),
-                ("arrow.triangle.merge", .green, "A PR was merged"),
+                ("bell", .secondary, "Other alerts reuse the status & comment icons above (approved, changes, CI, merged, 💬, 🤖)"),
             ])
             legendGroupEmoji("SECTIONS", [
                 ("@", "Open PRs where you're @mentioned"),
