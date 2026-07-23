@@ -250,8 +250,11 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(shown) { pr in prRow(pr) }
                 }
+                // Reserve a constant gutter so the scrollbar (thin or hover-expanded)
+                // always sits here and never overlaps the star/copy icons or shifts rows.
+                .padding(.trailing, 16)
             }
-            .scrollIndicators(.hidden)   // avoid the hover-expand scrollbar reflowing rows
+            .scrollIndicators(.visible)
             .frame(maxHeight: 170)
         } else {
             ForEach(shown) { pr in prRow(pr) }
