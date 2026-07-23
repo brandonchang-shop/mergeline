@@ -44,7 +44,7 @@ struct ContentView: View {
             if showSettings || showLegend {
                 Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showLegend = false } } label: {
                     Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
-                }.buttonStyle(.plain)
+                }.buttonStyle(HoverRow())
                 Text(showSettings ? "Settings" : "Icon Legend").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
