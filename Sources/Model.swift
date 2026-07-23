@@ -346,6 +346,7 @@ final class DashStore: ObservableObject {
         saveCache()
     }
     func clearNotifications() { notifications = []; saveCache() }
+    func dismissNotification(_ id: String) { notifications.removeAll { $0.id == id }; saveCache() }
 
     private static let relFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; return f

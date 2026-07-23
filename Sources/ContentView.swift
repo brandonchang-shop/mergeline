@@ -108,22 +108,29 @@ struct ContentView: View {
                     card {
                         ForEach(Array(store.notifications.enumerated()), id: \.element.id) { i, n in
                             if i > 0 { rowDividerInset }
-                            Button { open(n.url) } label: {
-                                HStack(spacing: 9) {
-                                    Image(systemName: changeIcon(n.change)).font(.system(size: 12))
-                                        .foregroundStyle(changeColor(n.change)).frame(width: 16)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(n.title).font(.system(size: 12)).lineLimit(1)
-                                        Text("\(n.change) · \(n.repo)").font(.system(size: 10))
-                                            .foregroundStyle(.secondary).lineLimit(1)
+                            HStack(spacing: 0) {
+                                Button { open(n.url) } label: {
+                                    HStack(spacing: 9) {
+                                        Image(systemName: changeIcon(n.change)).font(.system(size: 12))
+                                            .foregroundStyle(changeColor(n.change)).frame(width: 16)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(n.title).font(.system(size: 12)).lineLimit(1)
+                                            Text("\(n.change) · \(n.repo)").font(.system(size: 10))
+                                                .foregroundStyle(.secondary).lineLimit(1)
+                                        }
+                                        Spacer(minLength: 6)
+                                        Text(DashStore.relativeTime(n.at)).font(.system(size: 9))
+                                            .foregroundStyle(.secondary)
                                     }
-                                    Spacer(minLength: 6)
-                                    Text(DashStore.relativeTime(n.at)).font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .contentShape(Rectangle())
-                            }.buttonStyle(HoverRow())
+                                    .padding(.leading, 10).padding(.vertical, 6)
+                                    .contentShape(Rectangle())
+                                }.buttonStyle(HoverRow())
+                                Button { store.dismissNotification(n.id) } label: {
+                                    Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(.secondary).frame(width: 26, height: 26)
+                                        .contentShape(Rectangle())
+                                }.buttonStyle(HoverRow()).help("Dismiss")
+                            }
                         }
                     }
                 }
