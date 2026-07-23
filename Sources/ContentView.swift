@@ -115,8 +115,7 @@ struct ContentView: View {
                             HStack(spacing: 0) {
                                 Button { open(n.url) } label: {
                                     HStack(spacing: 9) {
-                                        Image(systemName: changeIcon(n.change)).font(.system(size: 12))
-                                            .foregroundStyle(changeColor(n.change)).frame(width: 16)
+                                        changeGlyph(n.change).frame(width: 16)
                                         VStack(alignment: .leading, spacing: 1) {
                                             Text(n.title).font(.system(size: 12)).lineLimit(1)
                                             Text("\(n.change) · \(n.repo)").font(.system(size: 10))
