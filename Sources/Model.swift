@@ -138,19 +138,6 @@ enum Shell {
     }
 }
 
-// MARK: - Notifications (in-app activity feed)
-
-/// A minimal per-PR snapshot used to diff successive fetches.
-struct PRSnap: Codable { let status: String; let human: Int; let bot: Int }
-
-/// One "something changed" entry shown in the bell dropdown.
-struct Notif: Codable, Identifiable {
-    let id: String            // url + change, so identical repeats collapse
-    let url, title, repo, change: String
-    let at: Date
-    var read: Bool
-}
-
 // MARK: - Cache (open instantly with last data)
 
 private struct Cache: Codable {
@@ -159,9 +146,6 @@ private struct Cache: Codable {
     var review: [PR]? = nil
     var mention: [PR]? = nil
     var updated: String
-    var snapshot: [String: PRSnap]? = nil   // baseline for change detection
-    var notifs: [Notif]? = nil              // in-app activity feed
-    var baseline: Bool? = nil               // have we recorded a first baseline yet
 }
 
 // MARK: - Store
@@ -188,6 +172,8 @@ final class DashStore: ObservableObject {
     @Published var reviewPRs: [PR] = []
     @Published var mentionPRs: [PR] = []
     @Published var loading = false
+    // gh dependency state, cached once OK (checkGH spawns 2 subprocesses).
+    private var cachedGH: GHState? = nil
     // True once at least one fetch (or a cache load) has populated the sections.
     // Used so empty sections show "No X" instead of spinning "Loading…" during
     // every background refresh — only the very first load shows "Loading…".
@@ -201,16 +187,6 @@ final class DashStore: ObservableObject {
     @Published var ghState: GHState = .ok
     private var pendingRefresh = false
     @Published var updated = ""
-    // In-app activity feed (bell dropdown). `snapshot` is the last-seen per-PR
-    // state used to diff each fetch; both persist in the cache.
-    @Published var notifications: [Notif] = []
-    var unreadCount: Int { notifications.reduce(0) { $0 + ($1.read ? 0 : 1) } }
-    private var snapshot: [String: PRSnap] = [:]
-    // Whether we've recorded at least one baseline. Distinct from snapshot.isEmpty
-    // (which is also empty after a zero-PR fetch) so notifications aren't lost.
-    private var hasSnapshotBaseline = false
-    // gh dependency state, cached once OK (checkGH spawns 2 subprocesses).
-    private var cachedGH: GHState? = nil
 
     let settings = Settings()
     private let cachePath = "\(NSHomeDirectory())/.pi/mergeline_cache.json"
@@ -235,9 +211,6 @@ final class DashStore: ObservableObject {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: cachePath)),
               let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
         openPRs = c.open; mergedPRs = c.merged; reviewPRs = c.review ?? []; mentionPRs = c.mention ?? []; updated = c.updated
-        notifications = c.notifs ?? []
-        snapshot = c.snapshot ?? [:]
-        hasSnapshotBaseline = c.baseline ?? !snapshot.isEmpty
         hasLoaded = true   // we have prior data; don't show first-load spinner
     }
     private func saveCache() {
@@ -245,8 +218,7 @@ final class DashStore: ObservableObject {
         // stall on slow/encrypted/network home dirs). 0600 keeps PR titles/URLs
         // private on shared machines.
         let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, mention: mentionPRs,
-                      updated: updated, snapshot: snapshot, notifs: notifications,
-                      baseline: hasSnapshotBaseline)
+                      updated: updated)
         let path = cachePath
         cacheQueue.async {
             guard let data = try? JSONEncoder().encode(c) else { return }
@@ -305,7 +277,6 @@ final class DashStore: ObservableObject {
                     // so a PR doesn't appear in two sections at once.
                     let seen = Set(sections.open.map(\.url)).union(sections.review.map(\.url))
                     self.mentionPRs = sections.mention.filter { !seen.contains($0.url) }
-                    self.detectChanges(self.openPRs + self.reviewPRs + self.mentionPRs + self.mergedPRs)
                     self.updated = Self.timeStamp()
                     self.hasLoaded = true
                     self.saveCache()
@@ -318,77 +289,6 @@ final class DashStore: ObservableObject {
             }
         }
     }
-
-    // ---- Change detection / notifications ----
-    /// Diffs the fresh PR set against the last snapshot and appends notifications
-    /// for anything that changed. First run only records the baseline (no spam).
-    private func detectChanges(_ prs: [PR]) {
-        let firstRun = !hasSnapshotBaseline
-        var events: [Notif] = []
-        var seenThisFetch = Set<String>()
-        for pr in prs {
-            if seenThisFetch.contains(pr.url) { continue }   // a url can appear in 2 sections
-            seenThisFetch.insert(pr.url)
-            let ns = PRSnap(status: pr.status, human: pr.humanCount, bot: pr.botCount)
-            let old = snapshot[pr.url]
-            // MERGE (not replace): carry the new state forward but keep baselines
-            // for PRs absent from this fetch, so a PR that briefly drops out of
-            // GitHub search doesn't look "new" when it returns.
-            snapshot[pr.url] = ns
-            guard !firstRun, let change = Self.changeString(old: old, new: ns) else { continue }
-            events.append(Notif(id: "\(pr.url)#\(Self.dedupKey(change))", url: pr.url, title: pr.title,
-                                repo: pr.repo, change: change, at: Date(), read: false))
-        }
-        hasSnapshotBaseline = true
-        guard !events.isEmpty else { return }
-        // Prepend, collapse identical (url+change) repeats, cap at 50.
-        var seen = Set<String>()
-        notifications = Array((events + notifications).filter { seen.insert($0.id).inserted }.prefix(50))
-    }
-
-    /// Dedup key for a change: comment notifications collapse by TYPE (not count)
-    /// so "1 new comment" then "2 new comments" on the same PR replace, not stack.
-    private static func dedupKey(_ change: String) -> String {
-        if change.contains("bot comment") { return "bot_comment" }
-        if change.contains("new comment") { return "human_comment" }
-        return change
-    }
-
-    /// Human-readable description of what changed, or nil if nothing notable.
-    static func changeString(old: PRSnap?, new: PRSnap) -> String? {
-        guard let old else { return new.status == "merged" ? nil : "New pull request" }
-        if new.status != old.status {
-            switch new.status {
-            case "merged":   return "Merged"
-            case "approved": return "Approved"
-            case "changes":  return "Changes requested"
-            case "fail":     return "CI failed"
-            default: break   // pending/neutral/draft transitions aren't worth a notif
-            }
-        }
-        if new.human > old.human {
-            let d = new.human - old.human
-            return "\(d) new comment\(d == 1 ? "" : "s")"
-        }
-        if new.bot > old.bot {
-            let d = new.bot - old.bot
-            return "\(d) new bot comment\(d == 1 ? "" : "s")"
-        }
-        return nil
-    }
-
-    func markAllRead() {
-        guard notifications.contains(where: { !$0.read }) else { return }
-        notifications = notifications.map { var n = $0; n.read = true; return n }
-        saveCache()
-    }
-    func clearNotifications() { notifications = []; saveCache() }
-    func dismissNotification(_ id: String) { notifications.removeAll { $0.id == id }; saveCache() }
-
-    private static let relFormatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter(); f.unitsStyle = .abbreviated; return f
-    }()
-    static func relativeTime(_ d: Date) -> String { relFormatter.localizedString(for: d, relativeTo: Date()) }
 
     /// Detect whether `gh` is installed and authenticated.
     private static func checkGH() -> GHState {
