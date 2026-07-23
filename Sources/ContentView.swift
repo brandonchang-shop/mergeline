@@ -36,7 +36,7 @@ struct ContentView: View {
                 .padding(.horizontal, 12).padding(.vertical, 10)
             }
         }
-        .frame(width: 340)
+        .frame(width: 370)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -445,7 +445,7 @@ struct SettingsInline: View {
             }
         }
         .padding(12)
-        .frame(width: 340, alignment: .leading)
+        .frame(width: 370, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
     }
 
