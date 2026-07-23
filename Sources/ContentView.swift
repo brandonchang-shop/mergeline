@@ -137,6 +137,7 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .padding(.trailing, 8)   // gutter so the scrollbar doesn't overlap rows
                 }
                 .frame(maxHeight: 320)
                 .scrollIndicators(.visible)
