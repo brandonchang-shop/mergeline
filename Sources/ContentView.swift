@@ -199,6 +199,16 @@ struct ContentView: View {
                 ("💬", "Open threads from people"),
                 ("🤖", "Open threads from bots (binks, orc, CI)"),
             ])
+            legendGroup("NOTIFICATIONS", [
+                ("bell.badge.fill", Color.primary, "Bell + badge — new activity since you last opened"),
+                ("plus.circle", .secondary, "A new pull request appeared"),
+                ("bubble.left.fill", .secondary, "New comment on a PR"),
+                ("cpu", .secondary, "New bot comment"),
+                ("checkmark.seal.fill", .green, "A PR was approved"),
+                ("xmark.octagon.fill", .red, "Changes were requested"),
+                ("exclamationmark.triangle.fill", .orange, "CI started failing"),
+                ("arrow.triangle.merge", .green, "A PR was merged"),
+            ])
             legendGroupEmoji("SECTIONS", [
                 ("@", "Open PRs where you're @mentioned"),
             ])
@@ -206,6 +216,7 @@ struct ContentView: View {
                 ("🖱", "Click a PR to open it in the browser"),
                 ("★", "Star to pin (sorts to top of section)"),
                 ("⎘", "Hover a row → copy-URL icon on the right"),
+                ("✕", "Dismiss one notification (Clear = all)"),
             ])
         }
         .frame(maxWidth: .infinity, alignment: .leading)
