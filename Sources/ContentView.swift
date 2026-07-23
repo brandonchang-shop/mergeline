@@ -198,70 +198,45 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Legend (what the icons mean)
+    // MARK: Legend (one unified list of every icon)
+    private enum LegendGlyph { case sym(String, Color); case emoji(String) }
+
     private var legendScreen: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            legendGroup("PR STATUS", [
-                ("arrow.triangle.branch", Color.secondary, "Open — no review/CI signal yet"),
-                ("clock.fill", .yellow, "CI checks running"),
-                ("exclamationmark.triangle.fill", .orange, "CI checks failing"),
-                ("xmark.octagon.fill", .red, "Changes requested"),
-                ("checkmark.seal.fill", .green, "Approved"),
-                ("pencil.circle", .secondary, "Draft"),
-                ("arrow.triangle.merge", .green, "Merged"),
-            ])
-            legendGroupEmoji("PR COMMENTS", [
-                ("💬", "Open threads from people"),
-                ("🤖", "Open threads from bots (binks, orc, CI)"),
-            ])
-            legendGroup("NOTIFICATIONS", [
-                ("plus.circle", .secondary, "A new pull request appeared"),
-                ("bell", .secondary, "Other alerts reuse the status & comment icons above (approved, changes, CI, merged, 💬, 🤖)"),
-            ])
-            legendGroupEmoji("SECTIONS", [
-                ("@", "Open PRs where you're @mentioned"),
-            ])
-            legendGroupEmoji("ROW ACTIONS", [
-                ("🖱", "Click a PR to open it in the browser"),
-                ("★", "Star to pin (sorts to top of section)"),
-                ("⎘", "Hover a row → copy-URL icon on the right"),
-                ("✕", "Dismiss one notification (Clear = all)"),
-            ])
+        let items: [(LegendGlyph, String)] = [
+            (.sym("arrow.triangle.branch", .secondary), "Open — no review/CI signal yet"),
+            (.sym("clock.fill", .yellow), "CI checks running"),
+            (.sym("exclamationmark.triangle.fill", .orange), "CI checks failing"),
+            (.sym("xmark.octagon.fill", .red), "Changes requested"),
+            (.sym("checkmark.seal.fill", .green), "Approved"),
+            (.sym("pencil.circle", .secondary), "Draft"),
+            (.sym("arrow.triangle.merge", .green), "Merged"),
+            (.emoji("💬"), "Open comment threads from people"),
+            (.emoji("🤖"), "Open comment threads from bots (binks, orc, CI)"),
+            (.sym("plus.circle", .secondary), "A new pull request appeared (notification)"),
+            (.emoji("@"), "Open PRs where you're @mentioned"),
+            (.emoji("★"), "Star to pin (sorts to top of its section)"),
+            (.emoji("🖱"), "Click a PR to open it in the browser"),
+            (.emoji("⎘"), "Hover a row → copy-URL icon on the right"),
+            (.emoji("✕"), "Dismiss one notification (Clear = all)"),
+        ]
+        return card {
+            ForEach(Array(items.enumerated()), id: \.offset) { i, it in
+                if i > 0 { rowDividerInset }
+                HStack(spacing: 10) {
+                    legendGlyphView(it.0).frame(width: 18)
+                    Text(it.1).font(.system(size: 12))
+                    Spacer()
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func legendGroup(_ title: String, _ rows: [(String, Color, String)]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            groupHeaderText(title)
-            card {
-                ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
-                    if i > 0 { rowDividerInset }
-                    HStack(spacing: 10) {
-                        Image(systemName: r.0).font(.system(size: 12)).foregroundStyle(r.1).frame(width: 18)
-                        Text(r.2).font(.system(size: 12))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                }
-            }
-        }
-    }
-
-    private func legendGroupEmoji(_ title: String, _ rows: [(String, String)]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            groupHeaderText(title)
-            card {
-                ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
-                    if i > 0 { rowDividerInset }
-                    HStack(spacing: 10) {
-                        Text(r.0).font(.system(size: 13)).frame(width: 18)
-                        Text(r.1).font(.system(size: 12))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                }
-            }
+    @ViewBuilder private func legendGlyphView(_ g: LegendGlyph) -> some View {
+        switch g {
+        case .sym(let n, let c): Image(systemName: n).font(.system(size: 12)).foregroundStyle(c)
+        case .emoji(let e): Text(e).font(.system(size: 13))
         }
     }
 
