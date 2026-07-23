@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if popover.isShown {
             popover.performClose(sender)
         } else {
-            store.refresh(force: false)   // reuse fresh data if the timer just ran
+            store.refresh()   // always fetch on open so newly created PRs show up
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()

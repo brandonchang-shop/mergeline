@@ -191,7 +191,6 @@ final class DashStore: ObservableObject {
     // Cached login (never changes). Persisted to UserDefaults so cold launches
     // skip the extra `gh api user` round-trip before the batched query.
     private var viewerLogin = UserDefaults.standard.string(forKey: "viewerLogin") ?? ""
-    private var lastRefreshAt: Date? = nil   // when the last successful fetch finished
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -219,17 +218,11 @@ final class DashStore: ObservableObject {
     }
 
     // ---- Refresh PRs (background) ----
-    /// `force: false` skips the fetch if data is still fresh (< freshWindow old),
-    /// so opening the popover right after a background refresh doesn't re-query.
-    private let freshWindow: TimeInterval = 30
-    func refresh(force: Bool = true) {
+    func refresh() {
         // If a refresh is already running, don't drop this request — remember it
         // and re-run once the current one finishes (picks up the latest settings,
         // e.g. a changed recent-days window).
         if loading { pendingRefresh = true; return }
-        // Skip redundant work: if the last fetch was recent enough, the in-memory
-        // data is already current (used for the on-open refresh).
-        if !force, let last = lastRefreshAt, Date().timeIntervalSince(last) < freshWindow { return }
         loading = true
         let since = Self.daysAgo(settings.recentDays)
         let includeTeam = settings.includeTeamReviews
@@ -262,7 +255,6 @@ final class DashStore: ObservableObject {
                 self.updated = Self.timeStamp()
                 self.loading = false
                 self.hasLoaded = true
-                self.lastRefreshAt = Date()
                 self.saveCache()
                 if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
             }
