@@ -32,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         popover.behavior = .applicationDefined   // we control closing via the outside-click monitor
         popover.animates = true
+        // Hide the popover arrow/beak so it drops flush like a native menu-bar panel.
+        popover.setValue(true, forKey: "shouldHideAnchor")
         let host = NSHostingController(rootView: ContentView(store: store))
         host.sizingOptions = [.preferredContentSize]   // popover auto-sizes to SwiftUI content (no scroll)
         popover.contentViewController = host
