@@ -45,7 +45,7 @@ struct ContentView: View {
                 Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showLegend = false } } label: {
                     Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                 }.buttonStyle(.plain)
-                Text(showSettings ? "Settings" : "Legend").font(.system(size: 13, weight: .bold))
+                Text(showSettings ? "Settings" : "Icon Legend").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
                 Text("Mergeline").font(.system(size: 14, weight: .heavy))
@@ -76,7 +76,7 @@ struct ContentView: View {
     private var utilitiesSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             sectionLabel("UTILITIES", "wrench.and.screwdriver")
-            utilityRow("Icon legend", icon: "questionmark.circle", tint: .secondary) {
+            utilityRow("Icon Legend", icon: "questionmark.circle", tint: .secondary) {
                 withAnimation(.easeInOut(duration: 0.12)) { showLegend = true }
             }
             utilityRow("Settings", icon: "gearshape", tint: .secondary) {
