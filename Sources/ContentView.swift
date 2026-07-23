@@ -354,6 +354,7 @@ struct PRRow: View {
         }
         .padding(.vertical, 1).padding(.horizontal, 3)
         .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.08) : .clear))
+        .contentShape(Rectangle())   // make the whole row (incl. gaps) hoverable
         .onHover { hover = $0 }
         .contextMenu {
             Button("Open in Browser", action: onOpen)
