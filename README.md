@@ -4,6 +4,7 @@ A tiny native macOS menu-bar app (`</>` icon) — a one-glance cockpit for your 
 
 - **Open PRs** — your open pull requests with status-colored icons (review decision + CI state)
 - **Review Requests** — open PRs awaiting your review (direct-only by default; team requests optional in Settings)
+- **Mentions** — open PRs where you're @mentioned, including ones you don't own
 - **Merged** — PRs merged in the last N days (configurable in Settings)
 - **Comment counts** — each PR row shows 💬 N (open human threads) and 🤖 N (open bot threads), so you know if a PR is waiting on a person or just bot nits
 - **Icon legend** — a built-in reference for what every icon/symbol means
