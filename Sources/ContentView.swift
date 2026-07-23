@@ -101,7 +101,7 @@ struct ContentView: View {
                 ("pencil.circle", .secondary, "Draft"),
                 ("arrow.triangle.merge", .green, "Merged"),
             ])
-            legendGroupEmoji("COMMENTS (unresolved threads)", [
+            legendGroupEmoji("PR COMMENTS", [
                 ("💬", "Open threads from people — need a response"),
                 ("🤖", "Open threads from bots (binks, orc, CI)"),
             ])
