@@ -250,8 +250,8 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(shown) { pr in prRow(pr) }
                 }
-                .padding(.trailing, 12)   // keep star/copy icons clear of the scrollbar
             }
+            .scrollIndicators(.hidden)   // avoid the hover-expand scrollbar reflowing rows
             .frame(maxHeight: 170)
         } else {
             ForEach(shown) { pr in prRow(pr) }
