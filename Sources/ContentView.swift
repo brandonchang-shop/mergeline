@@ -145,6 +145,17 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    // Comment notifications reuse the PR-row emoji (💬 human / 🤖 bot) so the two
+    // stay consistent; everything else uses a status SF Symbol.
+    @ViewBuilder private func changeGlyph(_ c: String) -> some View {
+        if c.contains("bot comment") {
+            Text("🤖").font(.system(size: 12))
+        } else if c.contains("new comment") {
+            Text("💬").font(.system(size: 12))
+        } else {
+            Image(systemName: changeIcon(c)).font(.system(size: 12)).foregroundStyle(changeColor(c))
+        }
+    }
     private func changeIcon(_ c: String) -> String {
         if c.hasPrefix("Approved") { return "checkmark.seal.fill" }
         if c.hasPrefix("Changes")  { return "xmark.octagon.fill" }
@@ -205,8 +216,6 @@ struct ContentView: View {
             ])
             legendGroup("NOTIFICATIONS", [
                 ("plus.circle", .secondary, "A new pull request appeared"),
-                ("bubble.left.fill", .secondary, "New comment on a PR"),
-                ("cpu", .secondary, "New bot comment"),
                 ("checkmark.seal.fill", .green, "A PR was approved"),
                 ("xmark.octagon.fill", .red, "Changes were requested"),
                 ("exclamationmark.triangle.fill", .orange, "CI started failing"),
