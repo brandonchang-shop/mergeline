@@ -184,7 +184,7 @@ final class DashStore: ObservableObject {
 
     let settings = Settings()
     private let cachePath = "\(NSHomeDirectory())/.pi/mergeline_cache.json"
-    private let enrichCount = 6
+    private var viewerLogin = ""   // cached across refreshes; never changes
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -217,15 +217,10 @@ final class DashStore: ObservableObject {
         // e.g. a changed recent-days window).
         if loading { pendingRefresh = true; return }
         loading = true
-        let days = settings.recentDays
-        let since = Self.daysAgo(days)
+        let since = Self.daysAgo(settings.recentDays)
         let includeTeam = settings.includeTeamReviews
-        let q = DispatchQueue.global(qos: .userInitiated)
 
-        // Do everything off the main thread, starting with the gh dependency
-        // check. If gh is missing/not-authed, surface a clear message and skip
-        // the fetches (which would otherwise just return empty lists).
-        q.async { [weak self] in
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             let gh = Self.checkGH()
             DispatchQueue.main.async { self.ghState = gh }
@@ -237,45 +232,19 @@ final class DashStore: ObservableObject {
                 return
             }
 
-            // Run the three gh queries concurrently and publish each section as
-            // soon as it returns (no section waits behind another).
-            let group = DispatchGroup()
-            group.enter()
-            q.async {
-                defer { group.leave() }
-                let open = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--state", "open"], enrich: true)
-                DispatchQueue.main.async { self.openPRs = open }
-            }
-            group.enter()
-            q.async {
-                defer { group.leave() }
-                let merged = self.fetchPRs(who: ["--author", "@me"], extraArgs: ["--merged", "--merged-at", ">=\(since)"], enrich: false)
-                DispatchQueue.main.async { self.mergedPRs = merged }
-            }
-            group.enter()
-            q.async {
-                defer { group.leave() }
-                // Direct-only uses the `user-review-requested:@me` qualifier (excludes
-                // team requests); team-inclusive uses gh's --review-requested flag.
-                let reviewWho = includeTeam
-                    ? ["--review-requested", "@me"]
-                    : ["user-review-requested:@me"]
-                let review = self.fetchPRs(who: reviewWho, extraArgs: ["--state", "open"], enrich: true)
-                DispatchQueue.main.async { self.reviewPRs = review }
-            }
-            group.enter()
-            q.async {
-                defer { group.leave() }
-                // Open PRs where I'm @mentioned (body or comments), incl. PRs I don't own.
-                let mentions = self.fetchPRs(who: ["--mentions", "@me"], extraArgs: ["--state", "open"], enrich: true)
-                DispatchQueue.main.async { self.mentionPRs = mentions }
-            }
+            // ONE batched GraphQL request fetches all four sections *and* their
+            // per-PR status + comment counts in a single network round-trip
+            // (previously ~4 searches + up to 6×2 enrichment calls per section).
+            let login = self.login()
+            let sections = self.fetchAll(login: login, since: since, includeTeam: includeTeam)
 
-            group.notify(queue: .main) { [weak self] in
-                guard let self else { return }
+            DispatchQueue.main.async {
+                self.openPRs = sections.open
+                self.mergedPRs = sections.merged
+                self.reviewPRs = sections.review
                 // Drop mention PRs I authored (already in Open PRs) to avoid duplicates.
-                let openURLs = Set(self.openPRs.map(\.url))
-                self.mentionPRs.removeAll { openURLs.contains($0.url) }
+                let openURLs = Set(sections.open.map(\.url))
+                self.mentionPRs = sections.mention.filter { !openURLs.contains($0.url) }
                 self.updated = Self.timeStamp()
                 self.loading = false
                 self.saveCache()
@@ -292,86 +261,134 @@ final class DashStore: ObservableObject {
             ? .notAuthed : .ok
     }
 
-    private func fetchPRs(who: [String], extraArgs: [String], enrich: Bool) -> [PR] {
-        var args = ["gh", "search", "prs"] + who +
-                   ["--sort", "updated", "--order", "desc", "--limit", "30",
-                    "--json", "title,url,repository"]
-        args.append(contentsOf: extraArgs)
-        let out = Shell.run(args)
-        guard let data = out.data(using: .utf8),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-        else { return [] }
-
-        var prs: [PR] = []
-        for item in arr {
-            let title = item["title"] as? String ?? ""
-            let url = item["url"] as? String ?? ""
-            let repo = (item["repository"] as? [String: Any])?["name"] as? String ?? ""
-            guard !url.isEmpty else { continue }
-            var pr = PR(repo: repo, title: title, url: url)
-            if !enrich { pr.status = "merged" }
-            prs.append(pr)
-        }
-
-        // Enrich the top N PRs' status in parallel (each is a separate `gh pr view`
-        // network call; running them serially was the main source of latency).
-        if enrich {
-            let n = min(enrichCount, prs.count)
-            let lock = NSLock()
-            DispatchQueue.concurrentPerform(iterations: n) { i in
-                let s = self.status(for: prs[i].url)
-                let (human, bot) = self.unresolvedThreadCounts(for: prs[i].url)
-                lock.lock()
-                prs[i].status = s
-                prs[i].humanCount = human
-                prs[i].botCount = bot
-                lock.unlock()
-            }
-        }
-        return prs
+    /// The authenticated user's login (GraphQL search needs the literal name,
+    /// not gh's `@me` shorthand). Fetched once and cached for the session.
+    private func login() -> String {
+        if !viewerLogin.isEmpty { return viewerLogin }
+        let out = Shell.run(["gh", "api", "user", "--jq", ".login"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        viewerLogin = out
+        return out
     }
 
-    /// Returns a status key for a PR based on review decision + CI rollup.
-    private func status(for url: String) -> String {
-        let out = Shell.run(["gh", "pr", "view", url,
-                             "--json", "reviewDecision,isDraft,statusCheckRollup,latestReviews"])
-        guard let data = out.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return "neutral" }
+    /// Fetches all four sections in a single GraphQL call. Each `search` alias
+    /// pulls the PR list plus the fields needed for status + 💬/🤖 counts, so
+    /// no follow-up per-PR requests are required.
+    private func fetchAll(login: String, since: String, includeTeam: Bool)
+        -> (open: [PR], merged: [PR], review: [PR], mention: [PR]) {
+        guard !login.isEmpty else { return ([], [], [], []) }
 
-        if obj["isDraft"] as? Bool == true { return "draft" }
-        // `reviewDecision` is only populated when reviews are REQUIRED (branch
-        // protection / CODEOWNERS). Fall back to the actual latest reviews so a
-        // plain approving review still shows as approved.
-        var review = obj["reviewDecision"] as? String ?? ""
-        if review.isEmpty, let reviews = obj["latestReviews"] as? [[String: Any]] {
-            let states = reviews.compactMap { ($0["state"] as? String)?.uppercased() }
-            if states.contains("CHANGES_REQUESTED") { review = "CHANGES_REQUESTED" }
-            else if states.contains("APPROVED") { review = "APPROVED" }
+        let openQ    = "author:\(login) is:pr is:open sort:updated-desc"
+        let mergedQ  = "author:\(login) is:pr is:merged merged:>=\(since) sort:updated-desc"
+        let reviewQ  = includeTeam
+            ? "review-requested:\(login) is:pr is:open sort:updated-desc"
+            : "user-review-requested:\(login) is:pr is:open sort:updated-desc"
+        let mentionQ = "mentions:\(login) is:pr is:open sort:updated-desc"
+
+        // Reusable PR field set. `reviews(last:30)` lets us derive approval even
+        // when `reviewDecision` is null (repos without required reviews).
+        let prFields = """
+          ... on PullRequest {
+            title url isDraft reviewDecision
+            repository { name }
+            commits(last:1){ nodes { commit { statusCheckRollup { state } } } }
+            reviews(last:30){ nodes { state author { login } } }
+            reviewThreads(first:60){ nodes {
+              isResolved
+              comments(first:1){ nodes { author { login __typename } } }
+            }}
+          }
+        """
+        let query = """
+        query($openQ:String!,$mergedQ:String!,$reviewQ:String!,$mentionQ:String!){
+          open:search(query:$openQ,type:ISSUE,first:20){ nodes { \(prFields) } }
+          merged:search(query:$mergedQ,type:ISSUE,first:20){ nodes { \(prFields) } }
+          review:search(query:$reviewQ,type:ISSUE,first:20){ nodes { \(prFields) } }
+          mention:search(query:$mentionQ,type:ISSUE,first:20){ nodes { \(prFields) } }
         }
-        var ci = "none"
-        if let checks = obj["statusCheckRollup"] as? [[String: Any]] {
-            var fail = false, pending = false, any = false
-            for c in checks {
-                any = true
-                if (c["__typename"] as? String) == "CheckRun" {
-                    let concl = (c["conclusion"] as? String ?? "").uppercased()
-                    let st = (c["status"] as? String ?? "").uppercased()
-                    if ["FAILURE","CANCELLED","TIMED_OUT","ACTION_REQUIRED","STARTUP_FAILURE"].contains(concl) { fail = true }
-                    else if st != "COMPLETED" { pending = true }
-                } else {
-                    let s = (c["state"] as? String ?? "").uppercased()
-                    if s == "FAILURE" || s == "ERROR" { fail = true }
-                    else if s == "PENDING" { pending = true }
+        """
+
+        let out = Shell.run(["gh", "api", "graphql",
+                             "-f", "query=\(query)",
+                             "-f", "openQ=\(openQ)",
+                             "-f", "mergedQ=\(mergedQ)",
+                             "-f", "reviewQ=\(reviewQ)",
+                             "-f", "mentionQ=\(mentionQ)"])
+        guard let data = out.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let root = obj["data"] as? [String: Any]
+        else { return ([], [], [], []) }
+
+        func parse(_ alias: String, merged: Bool) -> [PR] {
+            guard let sec = root[alias] as? [String: Any],
+                  let nodes = sec["nodes"] as? [[String: Any]] else { return [] }
+            return nodes.compactMap { Self.pr(from: $0, merged: merged) }
+        }
+        return (parse("open", merged: false),
+                parse("merged", merged: true),
+                parse("review", merged: false),
+                parse("mention", merged: false))
+    }
+
+    /// Builds a PR (with status + comment counts) from one GraphQL search node.
+    private static func pr(from node: [String: Any], merged: Bool) -> PR? {
+        let url = node["url"] as? String ?? ""
+        guard !url.isEmpty else { return nil }   // skip non-PR nodes (issues)
+        let title = node["title"] as? String ?? ""
+        let repo = (node["repository"] as? [String: Any])?["name"] as? String ?? ""
+
+        var pr = PR(repo: repo, title: title, url: url)
+        if merged {
+            pr.status = "merged"
+            return pr
+        }
+
+        // ---- status ----
+        if node["isDraft"] as? Bool == true {
+            pr.status = "draft"
+        } else {
+            // reviewDecision is null unless reviews are required; fall back to the
+            // latest review state per author.
+            var review = (node["reviewDecision"] as? String)?.uppercased() ?? ""
+            if review.isEmpty,
+               let nodes = (node["reviews"] as? [String: Any])?["nodes"] as? [[String: Any]] {
+                var latest: [String: String] = [:]   // author login -> last APPROVED/CHANGES_REQUESTED
+                for r in nodes {
+                    let st = (r["state"] as? String ?? "").uppercased()
+                    guard st == "APPROVED" || st == "CHANGES_REQUESTED" else { continue }
+                    let who = ((r["author"] as? [String: Any])?["login"] as? String) ?? ""
+                    latest[who] = st
                 }
+                let states = Set(latest.values)
+                if states.contains("CHANGES_REQUESTED") { review = "CHANGES_REQUESTED" }
+                else if states.contains("APPROVED") { review = "APPROVED" }
             }
-            ci = fail ? "fail" : (pending ? "pending" : (any ? "pass" : "none"))
+            // CI rollup: single state on the last commit.
+            let rollup = (((node["commits"] as? [String: Any])?["nodes"] as? [[String: Any]])?
+                .first?["commit"] as? [String: Any])?["statusCheckRollup"] as? [String: Any]
+            let ci = (rollup?["state"] as? String ?? "").uppercased()
+
+            if review == "CHANGES_REQUESTED" { pr.status = "changes" }
+            else if ci == "FAILURE" || ci == "ERROR" { pr.status = "fail" }
+            else if ci == "PENDING" || ci == "EXPECTED" { pr.status = "pending" }
+            else if review == "APPROVED" { pr.status = "approved" }
+            else { pr.status = "neutral" }
         }
-        if review == "CHANGES_REQUESTED" { return "changes" }
-        if ci == "fail" { return "fail" }
-        if ci == "pending" { return "pending" }
-        if review == "APPROVED" { return "approved" }
-        return "neutral"
+
+        // ---- unresolved review-thread counts (human vs bot) ----
+        if let nodes = (node["reviewThreads"] as? [String: Any])?["nodes"] as? [[String: Any]] {
+            var human = 0, bot = 0
+            for t in nodes {
+                if t["isResolved"] as? Bool == true { continue }
+                let author = ((t["comments"] as? [String: Any])?["nodes"] as? [[String: Any]])?
+                    .first?["author"] as? [String: Any]
+                let l = author?["login"] as? String ?? ""
+                let ty = author?["__typename"] as? String ?? ""
+                if isBot(login: l, typename: ty) { bot += 1 } else { human += 1 }
+            }
+            pr.humanCount = human; pr.botCount = bot
+        }
+        return pr
     }
 
     /// Login names treated as bots even though GitHub types them as `User`.
@@ -382,50 +399,6 @@ final class DashStore: ObservableObject {
         let l = login.lowercased()
         if l.hasSuffix("[bot]") || l.hasSuffix("-bot") { return true }
         return botLogins.contains(l)
-    }
-
-    /// Counts UNRESOLVED review threads on a PR, split into human vs bot by the
-    /// thread's first comment author. Returns (human, bot). Uses one GraphQL call.
-    private func unresolvedThreadCounts(for url: String) -> (Int, Int) {
-        // Parse https://github.com/OWNER/REPO/pull/NUMBER
-        guard let comps = URLComponents(string: url) else { return (0, 0) }
-        let parts = comps.path.split(separator: "/").map(String.init)  // [OWNER, REPO, "pull", NUMBER]
-        guard parts.count >= 4, parts[2] == "pull", let number = Int(parts[3]) else { return (0, 0) }
-        let owner = parts[0], repo = parts[1]
-
-        let query = """
-        query($owner:String!,$repo:String!,$number:Int!){
-          repository(owner:$owner,name:$repo){
-            pullRequest(number:$number){
-              reviewThreads(first:100){ nodes {
-                isResolved
-                comments(first:1){ nodes { author { login __typename } } }
-              }}
-            }
-          }
-        }
-        """
-        let out = Shell.run(["gh", "api", "graphql",
-                             "-f", "query=\(query)",
-                             "-F", "owner=\(owner)", "-F", "repo=\(repo)", "-F", "number=\(number)"])
-        guard let data = out.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let dataObj = obj["data"] as? [String: Any],
-              let repoObj = dataObj["repository"] as? [String: Any],
-              let pr = repoObj["pullRequest"] as? [String: Any],
-              let threads = pr["reviewThreads"] as? [String: Any],
-              let nodes = threads["nodes"] as? [[String: Any]]
-        else { return (0, 0) }
-
-        var human = 0, bot = 0
-        for t in nodes {
-            if t["isResolved"] as? Bool == true { continue }   // only OPEN threads
-            let author = ((t["comments"] as? [String: Any])?["nodes"] as? [[String: Any]])?.first?["author"] as? [String: Any]
-            let login = author?["login"] as? String ?? ""
-            let typename = author?["__typename"] as? String ?? ""
-            if Self.isBot(login: login, typename: typename) { bot += 1 } else { human += 1 }
-        }
-        return (human, bot)
     }
 
     // ---- helpers ----
