@@ -9,7 +9,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showLegend = false
 
-    private let topN = 5
+    private let topN = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
