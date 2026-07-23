@@ -204,7 +204,6 @@ struct ContentView: View {
                 ("🤖", "Open threads from bots (binks, orc, CI)"),
             ])
             legendGroup("NOTIFICATIONS", [
-                ("bell.badge.fill", Color.primary, "Bell + badge — new activity since you last opened"),
                 ("plus.circle", .secondary, "A new pull request appeared"),
                 ("bubble.left.fill", .secondary, "New comment on a PR"),
                 ("cpu", .secondary, "New bot comment"),
