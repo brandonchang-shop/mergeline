@@ -22,7 +22,7 @@ struct ContentView: View {
             } else if showLegend {
                 ScrollView {
                     legendScreen
-                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .padding(.leading, 12).padding(.trailing, 20).padding(.vertical, 10)
                 }
                 .frame(maxHeight: 460)
                 .scrollIndicators(.visible)
