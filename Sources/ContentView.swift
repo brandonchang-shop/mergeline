@@ -178,17 +178,7 @@ struct ContentView: View {
             if store.openPRs.isEmpty {
                 emptyRow(store.loading ? "Loading…" : "No open PRs")
             } else {
-                let shown = expandPRs ? store.openPRs : Array(store.openPRs.prefix(topN))
-                ForEach(shown) { pr in prRow(pr) }
-                if store.openPRs.count > topN {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { expandPRs.toggle() }
-                    } label: {
-                        Label(expandPRs ? "Show less" : "\(store.openPRs.count - topN) more",
-                              systemImage: expandPRs ? "chevron.up" : "chevron.down")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }.buttonStyle(.plain)
-                }
+                prList(store.openPRs, expanded: $expandPRs)
             }
         }
     }
@@ -204,9 +194,7 @@ struct ContentView: View {
             if store.reviewPRs.isEmpty {
                 emptyRow(store.loading ? "Loading…" : "No review requests")
             } else {
-                let shown = expandReview ? store.reviewPRs : Array(store.reviewPRs.prefix(topN))
-                ForEach(shown) { pr in prRow(pr) }
-                moreToggle(total: store.reviewPRs.count, expanded: $expandReview)
+                prList(store.reviewPRs, expanded: $expandReview)
             }
         }
     }
@@ -218,11 +206,27 @@ struct ContentView: View {
             if store.mergedPRs.isEmpty {
                 emptyRow(store.loading ? "Loading…" : "Nothing merged")
             } else {
-                let shown = expandMerged ? store.mergedPRs : Array(store.mergedPRs.prefix(topN))
-                ForEach(shown) { pr in prRow(pr) }
-                moreToggle(total: store.mergedPRs.count, expanded: $expandMerged)
+                prList(store.mergedPRs, expanded: $expandMerged)
             }
         }
+    }
+
+    // Shared PR list. Collapsed = top N. Expanded = all rows, but if the list is
+    // long the SECTION scrolls (capped height) instead of growing the whole window.
+    @ViewBuilder
+    private func prList(_ prs: [PR], expanded: Binding<Bool>) -> some View {
+        let shown = expanded.wrappedValue ? prs : Array(prs.prefix(topN))
+        if expanded.wrappedValue && prs.count > 8 {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(shown) { pr in prRow(pr) }
+                }
+            }
+            .frame(maxHeight: 300)
+        } else {
+            ForEach(shown) { pr in prRow(pr) }
+        }
+        moreToggle(total: prs.count, expanded: expanded)
     }
 
     // Shared "N more / Show less" toggle (matches Open PRs).
