@@ -188,6 +188,7 @@ final class DashStore: ObservableObject {
 
     let settings = Settings()
     private let cachePath = "\(NSHomeDirectory())/.pi/mergeline_cache.json"
+    private let cacheQueue = DispatchQueue(label: "io.local.mergeline.cache", qos: .utility)
     // Cached login (never changes). Persisted to UserDefaults so cold launches
     // skip the extra `gh api user` round-trip before the batched query.
     private var viewerLogin = UserDefaults.standard.string(forKey: "viewerLogin") ?? ""
@@ -211,9 +212,15 @@ final class DashStore: ObservableObject {
         hasLoaded = true   // we have prior data; don't show first-load spinner
     }
     private func saveCache() {
+        // Snapshot on the main thread, then encode + write off it (disk I/O can
+        // stall on slow/encrypted/network home dirs). 0600 keeps PR titles/URLs
+        // private on shared machines.
         let c = Cache(open: openPRs, merged: mergedPRs, review: reviewPRs, mention: mentionPRs, updated: updated)
-        if let data = try? JSONEncoder().encode(c) {
-            try? data.write(to: URL(fileURLWithPath: cachePath))
+        let path = cachePath
+        cacheQueue.async {
+            guard let data = try? JSONEncoder().encode(c) else { return }
+            try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
         }
     }
 
@@ -252,9 +259,10 @@ final class DashStore: ObservableObject {
                     self.openPRs = sections.open
                     self.mergedPRs = sections.merged
                     self.reviewPRs = sections.review
-                    // Drop mention PRs I authored (already in Open PRs) to avoid duplicates.
-                    let openURLs = Set(sections.open.map(\.url))
-                    self.mentionPRs = sections.mention.filter { !openURLs.contains($0.url) }
+                    // Drop mention PRs already shown in Open PRs or Review Requests
+                    // so a PR doesn't appear in two sections at once.
+                    let seen = Set(sections.open.map(\.url)).union(sections.review.map(\.url))
+                    self.mentionPRs = sections.mention.filter { !seen.contains($0.url) }
                     self.updated = Self.timeStamp()
                     self.hasLoaded = true
                     self.saveCache()
@@ -276,12 +284,23 @@ final class DashStore: ObservableObject {
     /// The authenticated user's login (GraphQL search needs the literal name,
     /// not gh's `@me` shorthand). Fetched once and cached for the session.
     private func login() -> String {
-        if !viewerLogin.isEmpty { return viewerLogin }
+        if Self.isValidLogin(viewerLogin) { return viewerLogin }
         let out = Shell.run(["gh", "api", "user", "--jq", ".login"])
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidLogin(out) else { return "" }   // don't trust/interpolate garbage
         viewerLogin = out
-        if !out.isEmpty { UserDefaults.standard.set(out, forKey: "viewerLogin") }
+        UserDefaults.standard.set(out, forKey: "viewerLogin")
         return out
+    }
+
+    /// GitHub usernames: 1–39 chars, alphanumerics + single hyphens, no leading/
+    /// trailing hyphen. Validated before interpolating into search queries (also
+    /// rejects a tampered UserDefaults `viewerLogin`).
+    private static func isValidLogin(_ s: String) -> Bool {
+        guard (1...39).contains(s.count), !s.hasPrefix("-"), !s.hasSuffix("-") else { return false }
+        let allowed = CharacterSet(charactersIn:
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+        return s.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
 
     /// Fetches all four sections in a single GraphQL call. Each `search` alias
@@ -307,7 +326,7 @@ final class DashStore: ObservableObject {
             title url isDraft reviewDecision
             repository { name }
             commits(last:1){ nodes { commit { statusCheckRollup { state } } } }
-            reviews(last:20){ nodes { state author { login } } }
+            reviews(last:10, states:[APPROVED, CHANGES_REQUESTED]){ nodes { state author { login } } }
             reviewThreads(first:30){ nodes {
               isResolved
               comments(first:1){ nodes { author { login __typename } } }
@@ -368,7 +387,11 @@ final class DashStore: ObservableObject {
             // reviewDecision is null unless reviews are required; fall back to the
             // latest review state per author.
             var review = (node["reviewDecision"] as? String)?.uppercased() ?? ""
-            if review.isEmpty,
+            // `reviewDecision` is only conclusive as APPROVED / CHANGES_REQUESTED.
+            // For "" (repos without required reviews) OR REVIEW_REQUIRED (protected
+            // repo, reviews still pending), derive from the actual review states so
+            // a requested-changes review isn't shown as neutral.
+            if review != "APPROVED", review != "CHANGES_REQUESTED",
                let nodes = (node["reviews"] as? [String: Any])?["nodes"] as? [[String: Any]] {
                 var latest: [String: String] = [:]   // author login -> last APPROVED/CHANGES_REQUESTED
                 for r in nodes {
@@ -420,11 +443,17 @@ final class DashStore: ObservableObject {
     }
 
     // ---- helpers ----
+    // DateFormatter init is expensive; reuse one instance per format. Both are
+    // only called from the single background fetch queue, so no concurrency issue.
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f
+    }()
     static func daysAgo(_ n: Int) -> String {
         let d = Calendar.current.date(byAdding: .day, value: -n, to: Date()) ?? Date()
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: d)
+        return dayFormatter.string(from: d)
     }
-    static func timeStamp() -> String {
-        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f.string(from: Date())
-    }
+    static func timeStamp() -> String { timeFormatter.string(from: Date()) }
 }

@@ -290,7 +290,12 @@ struct ContentView: View {
         Text(t).font(.system(size: 11)).foregroundStyle(.secondary)
     }
     private func open(_ url: String) {
-        if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+        // Only open https github.com links (URLs come from the API; guard against
+        // an unexpected scheme/host being handed to the system opener).
+        guard let u = URL(string: url), u.scheme == "https",
+              (u.host == "github.com" || (u.host?.hasSuffix(".github.com") ?? false))
+        else { return }
+        NSWorkspace.shared.open(u)
     }
 }
 
