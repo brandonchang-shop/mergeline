@@ -43,14 +43,18 @@ struct ContentView: View {
         HStack(spacing: 6) {
             if showSettings || showLegend {
                 Button { withAnimation(.easeInOut(duration: 0.12)) { showSettings = false; showLegend = false } } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+                        Text("Back").font(.system(size: 13, weight: .semibold))
+                    }
                 }.buttonStyle(HoverRow())
+                Spacer()
                 Text(showSettings ? "Settings" : "Icon Legend").font(.system(size: 13, weight: .bold))
             } else {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.primary)
                 Text("Mergeline").font(.system(size: 14, weight: .heavy))
+                Spacer()
             }
-            Spacer()
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
     }
