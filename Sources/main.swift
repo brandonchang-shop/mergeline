@@ -17,7 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let popover = NSPopover()
     let store = DashStore()
     private var outsideClickMonitor: Any?
-    private var refreshTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         enforceSingleInstance()   // quit any older copy so only one bag icon exists
@@ -41,16 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.delegate = self
 
         store.refresh()   // warm the cache in the background at launch
-
-        // Keep data fresh in the background so the popover is already loaded when
-        // opened (no on-open wait). Fires whether or not the popover is showing;
-        // `refresh()` no-ops if one is already running.
-        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
-            self?.store.refresh()
-        }
-        timer.tolerance = 15   // let macOS coalesce for battery efficiency
-        RunLoop.main.add(timer, forMode: .common)
-        refreshTimer = timer
+        // No background polling timer: the batched GraphQL query is expensive and
+        // a frequent timer trips GitHub's secondary rate limit. We refresh on
+        // launch and every time the popover opens; the disk cache makes opening
+        // feel instant meanwhile.
     }
 
     /// Menu-bar (accessory) apps have no menu bar, so paste/copy shortcuts aren't

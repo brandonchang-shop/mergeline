@@ -246,16 +246,20 @@ final class DashStore: ObservableObject {
             let sections = self.fetchAll(login: login, since: since, includeTeam: includeTeam)
 
             DispatchQueue.main.async {
-                self.openPRs = sections.open
-                self.mergedPRs = sections.merged
-                self.reviewPRs = sections.review
-                // Drop mention PRs I authored (already in Open PRs) to avoid duplicates.
-                let openURLs = Set(sections.open.map(\.url))
-                self.mentionPRs = sections.mention.filter { !openURLs.contains($0.url) }
-                self.updated = Self.timeStamp()
+                // On a failed fetch (e.g. GitHub rate limit → nil), KEEP the last
+                // good data and cache instead of blanking the UI.
+                if let sections {
+                    self.openPRs = sections.open
+                    self.mergedPRs = sections.merged
+                    self.reviewPRs = sections.review
+                    // Drop mention PRs I authored (already in Open PRs) to avoid duplicates.
+                    let openURLs = Set(sections.open.map(\.url))
+                    self.mentionPRs = sections.mention.filter { !openURLs.contains($0.url) }
+                    self.updated = Self.timeStamp()
+                    self.hasLoaded = true
+                    self.saveCache()
+                }
                 self.loading = false
-                self.hasLoaded = true
-                self.saveCache()
                 if self.pendingRefresh { self.pendingRefresh = false; self.refresh() }
             }
         }
@@ -283,9 +287,11 @@ final class DashStore: ObservableObject {
     /// Fetches all four sections in a single GraphQL call. Each `search` alias
     /// pulls the PR list plus the fields needed for status + 💬/🤖 counts, so
     /// no follow-up per-PR requests are required.
+    /// Returns nil on failure (empty login, network error, or a GraphQL error
+    /// such as rate limiting) so the caller can preserve the last good data.
     private func fetchAll(login: String, since: String, includeTeam: Bool)
-        -> (open: [PR], merged: [PR], review: [PR], mention: [PR]) {
-        guard !login.isEmpty else { return ([], [], [], []) }
+        -> (open: [PR], merged: [PR], review: [PR], mention: [PR])? {
+        guard !login.isEmpty else { return nil }
 
         let openQ    = "author:\(login) is:pr is:open sort:updated-desc"
         let mergedQ  = "author:\(login) is:pr is:merged merged:>=\(since) sort:updated-desc"
@@ -301,8 +307,8 @@ final class DashStore: ObservableObject {
             title url isDraft reviewDecision
             repository { name }
             commits(last:1){ nodes { commit { statusCheckRollup { state } } } }
-            reviews(last:30){ nodes { state author { login } } }
-            reviewThreads(first:60){ nodes {
+            reviews(last:20){ nodes { state author { login } } }
+            reviewThreads(first:30){ nodes {
               isResolved
               comments(first:1){ nodes { author { login __typename } } }
             }}
@@ -324,9 +330,12 @@ final class DashStore: ObservableObject {
                              "-f", "reviewQ=\(reviewQ)",
                              "-f", "mentionQ=\(mentionQ)"])
         guard let data = out.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let root = obj["data"] as? [String: Any]
-        else { return ([], [], [], []) }
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        // A GraphQL error (e.g. RATE_LIMITED) returns an `errors` array; treat as
+        // failure so we don't blank the UI with empty sections.
+        if obj["errors"] != nil { return nil }
+        guard let root = obj["data"] as? [String: Any] else { return nil }
 
         func parse(_ alias: String, merged: Bool) -> [PR] {
             guard let sec = root[alias] as? [String: Any],
